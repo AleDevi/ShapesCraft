@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#1f6feb" />
+    <link rel="icon" href="./icon.svg" type="image/svg+xml" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <title>ShapesCraft</title>
+  </head>
+  <body>
+    <header>
+      <h1>ShapesCraft</h1>
+      <p class="tagline">Dalla foto al vettoriale in scala reale</p>
+    </header>
+
+    <main>
+      <section class="card">
+        <h2><span class="step">1</span> Cornice</h2>
+        <label class="row">
+          Formato
+          <select id="frame"></select>
+        </label>
+        <p class="hint">
+          Stampa la cornice al 100% (senza "adatta alla pagina") e controlla che la linea di riferimento misuri 100 mm.
+          Disegna o appoggia l'oggetto dentro i quattro quadrati neri.
+        </p>
+        <div class="buttons">
+          <button id="print-frame" type="button" class="secondary">Apri cornice da stampare</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2><span class="step">2</span> Foto</h2>
+        <p class="hint">Inquadra tutto il foglio con i quattro marker visibili. Luce uniforme, niente riflessi.</p>
+        <div class="buttons">
+          <label class="button">
+            Scatta foto
+            <input id="camera" type="file" accept="image/*" capture="environment" hidden />
+          </label>
+          <label class="button secondary">
+            Carica immagine
+            <input id="upload" type="file" accept="image/*" hidden />
+          </label>
+        </div>
+        <p id="status" class="status" role="status"></p>
+      </section>
+
+      <section id="result" class="card" hidden>
+        <h2><span class="step">3</span> Vettoriale</h2>
+        <div class="preview-wrap"><div id="preview" class="preview"></div></div>
+        <p id="summary" class="summary"></p>
+
+        <div class="controls">
+          <label>
+            <span>Soglia <output id="threshold-out"></output></span>
+            <input id="threshold" type="range" min="0.1" max="0.95" step="0.01" />
+          </label>
+          <button id="threshold-auto" type="button" class="link">Automatica</button>
+          <label>
+            <span>Precisione <output id="tolerance-out"></output></span>
+            <input id="tolerance" type="range" min="0.05" max="1" step="0.05" />
+          </label>
+          <label>
+            <span>Ignora forme sotto <output id="minarea-out"></output></span>
+            <input id="minarea" type="range" min="0" max="100" step="1" />
+          </label>
+          <label>
+            <span>Ammorbidisci bordi <output id="blur-out"></output></span>
+            <input id="blur" type="range" min="0" max="1.5" step="0.1" />
+          </label>
+          <label class="check"><input id="invert" type="checkbox" /> Forme chiare su fondo scuro</label>
+          <label class="check"><input id="show-photo" type="checkbox" checked /> Mostra foto sotto i tracciati</label>
+        </div>
+
+        <div class="buttons">
+          <button id="download" type="button">Scarica SVG</button>
+        </div>
+      </section>
+    </main>
+
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>
