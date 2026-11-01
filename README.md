@@ -8,7 +8,7 @@ The app is available in English and Italian: it follows the phone's language, an
 
 ## How to use it
 
-1. Pick the format (A4 or A3) and open the printable frame. Print it at 100%: the reference line at the bottom must measure 100 mm.
+1. Open the app and tap Start. Pick the format (A4 or A3) and get the frame as a PDF: share it from the phone (email, chat, Drive, a printer app), download it, or copy its link to open it on a computer. Print it at 100%: the reference line at the bottom must measure 100 mm.
 2. For a rigid frame, glue it to card or thin plastic and cut along the black lines (outer edge and central window). Or use the sheet as it is and draw inside the window.
 3. Lay the frame over the drawing (dark marker on white paper) or the object, which must sit inside the window.
 4. Take the photo with the whole frame in view. The app finds the markers, corrects the perspective and traces the outlines.
@@ -21,6 +21,8 @@ The app is available in English and Italian: it follows the phone's language, an
 - **Lighting**: the paper background is estimated with a quadratic surface and removed, then an automatic threshold (Otsu) is applied.
 - **Vectorisation**: marching squares with sub-pixel interpolation, Douglas–Peucker simplification, sharp corners preserved and Bézier curves everywhere else.
 - **Single line**: Zhang–Suen thinning of the ink, skeleton split into branches between ends and junctions, spurious branches removed, ends extended by half a stroke; the open paths are exported as unclosed lines in the SVG.
+
+- **Frame PDF**: a small built-in writer turns the same drawing as the SVG frame into a vector PDF (Helvetica, WinAnsi). The build also publishes every frame under `frames/`, so a computer can open it by link.
 
 Everything runs in the browser, no server.
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { frameById, frameSvg } from '../src/core/frame';
 import { applyH, findHomography } from '../src/core/homography';
 import { detectFrame, prepare, rectify, trace, DEFAULT_TRACE } from '../src/core/pipeline';
+import { framePdf } from '../src/core/pdf';
 import { exportSvg } from '../src/core/svg';
 import { smoothContour, smoothPath } from '../src/core/trace';
 import { renderPhoto } from './synthetic';
@@ -30,6 +31,19 @@ describe('frame', () => {
     expect(frameSvg(frameById('a3'))).toContain('width="297mm" height="420mm"');
     expect(frameSvg(frameById('a4'))).toContain('the line = 100 mm');
     expect(frameSvg(frameById('a4'), 'it')).toContain('la linea = 100 mm');
+  });
+
+  it('exports a well-formed PDF at real size', () => {
+    const pdf = new TextDecoder().decode(framePdf(frameById('a4'), 'it'));
+    expect(pdf).toContain('/MediaBox [0 0 595.276 841.89]');
+    // The middle dot is written as a WinAnsi octal escape.
+    expect(pdf).toContain('(ShapesCraft A4 \\267 stampa al 100%: la linea = 100 mm) Tj');
+    // Every cross-reference entry points at the start of its object.
+    const xref = Number(pdf.match(/startxref\n(\d+)/)![1]);
+    const offsets = [...pdf.slice(xref).matchAll(/^(\d{10}) 00000 n $/gm)].map((m) => Number(m[1]));
+    expect(offsets).toHaveLength(5);
+    offsets.forEach((o, i) => expect(pdf.slice(o)).toMatch(new RegExp(`^${i + 1} 0 obj`)));
+    expect(new TextDecoder().decode(framePdf(frameById('a3')))).toContain('/MediaBox [0 0 841.89 1190.551]');
   });
 });
 

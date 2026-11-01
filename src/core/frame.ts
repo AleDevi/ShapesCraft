@@ -111,17 +111,25 @@ export function markerCells(id: number): number[][] {
   return cells;
 }
 
-/** Printable SVG of the frame at real size. */
-export function frameSvg(f: FrameLayout, lang: Lang = 'en'): string {
+/** One drawing primitive of the printable frame, in sheet millimetres. */
+export type FrameOp =
+  /** Filled rectangles; with `evenOdd`, later rectangles punch holes in the first. */
+  | { kind: 'fill'; rects: Rect[]; gray: number; evenOdd?: boolean }
+  | { kind: 'line'; x1: number; y1: number; x2: number; y2: number; width: number }
+  | { kind: 'outline'; rect: Rect; width: number }
+  /** Text centred on x, with y on the baseline. */
+  | { kind: 'text'; x: number; y: number; size: number; body: string };
+
+/** The printable frame as drawing primitives, shared by the SVG and PDF output. */
+export function frameDrawing(f: FrameLayout, lang: Lang = 'en'): FrameOp[] {
   const t = translator(lang);
-  const parts: string[] = [];
+  const ops: FrameOp[] = [];
   const outer = outerRect(f);
   const win = windowRect(f);
   const s = markerSize(f);
 
-  // Grey band with the window punched out (even-odd), so the frame reads as a frame.
-  const rectPath = (r: Rect) => `M${r.x} ${r.y}h${r.w}v${r.h}h${-r.w}Z`;
-  parts.push(`<path d="${rectPath(outer)} ${rectPath(win)}" fill="#d9d9d9" fill-rule="evenodd"/>`);
+  // Grey band with the window punched out, so the frame reads as a frame.
+  ops.push({ kind: 'fill', rects: [outer, win], gray: 0.85, evenOdd: true });
 
   const origins = markerOrigins(f);
   for (const id of MARKER_IDS) {
@@ -129,18 +137,17 @@ export function frameSvg(f: FrameLayout, lang: Lang = 'en'): string {
     const cell = s / cells.length;
     const { x, y } = origins[id];
     // White quiet zone: the detector needs contrast all around the marker.
-    parts.push(`<rect x="${x - f.markerPad + 1}" y="${y - f.markerPad + 1}" width="${s + 2 * f.markerPad - 2}" height="${s + 2 * f.markerPad - 2}" fill="#fff"/>`);
-    parts.push(`<rect x="${x}" y="${y}" width="${s}" height="${s}" fill="#000"/>`);
+    const pad = f.markerPad - 1;
+    ops.push({ kind: 'fill', rects: [{ x: x - pad, y: y - pad, w: s + 2 * pad, h: s + 2 * pad }], gray: 1 });
+    ops.push({ kind: 'fill', rects: [{ x, y, w: s, h: s }], gray: 0 });
+    const white: Rect[] = [];
     cells.forEach((row, cy) =>
       row.forEach((v, cx) => {
-        if (v) {
-          // Slight overlap avoids hairline seams between adjacent white cells.
-          parts.push(
-            `<rect x="${x + cx * cell}" y="${y + cy * cell}" width="${cell + 0.02}" height="${cell + 0.02}" fill="#fff"/>`,
-          );
-        }
+        // Slight overlap avoids hairline seams between adjacent white cells.
+        if (v) white.push({ x: x + cx * cell, y: y + cy * cell, w: cell + 0.02, h: cell + 0.02 });
       }),
     );
+    ops.push({ kind: 'fill', rects: white, gray: 1 });
   }
 
   // Scale ruler and label on the bottom band, between the markers.
@@ -148,22 +155,37 @@ export function frameSvg(f: FrameLayout, lang: Lang = 'en'): string {
   const bandTop = f.height - f.margin - f.band;
   const rx = cx - 50;
   const ry = bandTop + f.band * 0.35;
-  parts.push(`<line x1="${rx}" y1="${ry}" x2="${rx + 100}" y2="${ry}" stroke="#000" stroke-width="0.3"/>`);
+  ops.push({ kind: 'line', x1: rx, y1: ry, x2: rx + 100, y2: ry, width: 0.3 });
   for (let i = 0; i <= 10; i++) {
     const len = i % 5 === 0 ? 3 : 1.5;
-    parts.push(`<line x1="${rx + i * 10}" y1="${ry}" x2="${rx + i * 10}" y2="${ry + len}" stroke="#000" stroke-width="0.3"/>`);
+    ops.push({ kind: 'line', x1: rx + i * 10, y1: ry, x2: rx + i * 10, y2: ry + len, width: 0.3 });
   }
-  const text = (y: number, size: number, body: string) =>
-    `<text x="${cx}" y="${y}" font-family="sans-serif" font-size="${size}" text-anchor="middle">${body}</text>`;
-  parts.push(text(ry + 8, 3, `ShapesCraft ${f.id.toUpperCase()} · ${t('sheet.scale')}`));
-  parts.push(text(f.margin + f.band / 2 - 1, 2.8, t('sheet.glue1')));
-  parts.push(text(f.margin + f.band / 2 + 3, 2.8, t('sheet.glue2')));
+  ops.push({ kind: 'text', x: cx, y: ry + 8, size: 3, body: `ShapesCraft ${f.id.toUpperCase()} · ${t('sheet.scale')}` });
+  ops.push({ kind: 'text', x: cx, y: f.margin + f.band / 2 - 1, size: 2.8, body: t('sheet.glue1') });
+  ops.push({ kind: 'text', x: cx, y: f.margin + f.band / 2 + 3, size: 2.8, body: t('sheet.glue2') });
 
   // Cut lines.
-  for (const r of [outer, win]) {
-    parts.push(`<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="none" stroke="#000" stroke-width="0.3"/>`);
-  }
+  for (const r of [outer, win]) ops.push({ kind: 'outline', rect: r, width: 0.3 });
+  return ops;
+}
 
+/** Printable SVG of the frame at real size. */
+export function frameSvg(f: FrameLayout, lang: Lang = 'en'): string {
+  const hex = (g: number) => `#${Math.round(g * 255).toString(16).padStart(2, '0').repeat(3)}`;
+  const rectPath = (r: Rect) => `M${r.x} ${r.y}h${r.w}v${r.h}h${-r.w}Z`;
+  const escape = (text: string) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  const parts = frameDrawing(f, lang).map((op) => {
+    switch (op.kind) {
+      case 'fill':
+        return `<path d="${op.rects.map(rectPath).join(' ')}" fill="${hex(op.gray)}"${op.evenOdd ? ' fill-rule="evenodd"' : ''}/>`;
+      case 'line':
+        return `<line x1="${op.x1}" y1="${op.y1}" x2="${op.x2}" y2="${op.y2}" stroke="#000" stroke-width="${op.width}"/>`;
+      case 'outline':
+        return `<rect x="${op.rect.x}" y="${op.rect.y}" width="${op.rect.w}" height="${op.rect.h}" fill="none" stroke="#000" stroke-width="${op.width}"/>`;
+      case 'text':
+        return `<text x="${op.x}" y="${op.y}" font-family="Helvetica, Arial, sans-serif" font-size="${op.size}" text-anchor="middle">${escape(op.body)}</text>`;
+    }
+  });
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${f.width}mm" height="${f.height}mm" viewBox="0 0 ${f.width} ${f.height}">`,
     `<rect width="${f.width}" height="${f.height}" fill="#fff"/>`,
