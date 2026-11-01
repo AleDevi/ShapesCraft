@@ -28,6 +28,8 @@ describe('frame', () => {
   it('prints at real size', () => {
     expect(frameSvg(frameById('a4'))).toContain('width="210mm" height="297mm"');
     expect(frameSvg(frameById('a3'))).toContain('width="297mm" height="420mm"');
+    expect(frameSvg(frameById('a4'))).toContain('the line = 100 mm');
+    expect(frameSvg(frameById('a4'), 'it')).toContain('la linea = 100 mm');
   });
 });
 

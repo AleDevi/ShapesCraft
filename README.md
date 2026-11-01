@@ -1,44 +1,48 @@
 # ShapesCraft
 
-Web app (PWA) che trasforma la foto di un disegno o di un oggetto appoggiato su una cornice stampata in un vettoriale SVG in scala reale, pronto per laser, CNC o plotter da taglio.
+**English** · [Italiano](README.it.md)
 
-## Come si usa
+A web app (PWA) that turns a photo of a drawing or an object laid on a printed frame into a true-scale SVG vector, ready for a laser cutter, CNC or cutting plotter.
 
-1. Scegli il formato (A4 o A3) e apri la cornice da stampare. Stampala al 100%: la linea di riferimento in basso deve misurare 100 mm.
-2. Per una cornice rigida incollala su cartoncino o plastica sottile e ritaglia lungo le linee nere (bordo esterno e finestra centrale). In alternativa usa il foglio così com'è e disegna dentro la finestra.
-3. Appoggia la cornice sul disegno (pennarello scuro su carta bianca) o sull'oggetto, che deve stare dentro la finestra.
-4. Scatta la foto inquadrando tutta la cornice. L'app trova i marker, raddrizza la prospettiva e traccia i contorni.
-5. Regola soglia, precisione e rumore, poi scarica l'SVG (unità in millimetri).
+The app is available in English and Italian: it follows the phone's language, and you can switch it from the menu at the top.
 
-## Come funziona
+## How to use it
 
-- **Marker**: quattro ArUco `ARUCO_MIP_36h12` (id 0–3) rilevati con [js-aruco2](https://github.com/damianofalcioni/js-aruco2) (incluso in `src/vendor`), poi raffinati al sub-pixel adattando una retta su ogni lato.
-- **Prospettiva**: omografia ai minimi quadrati sui 16 angoli dei marker; la finestra della cornice viene ricampionata a 5 px/mm.
-- **Luce**: lo sfondo della carta viene stimato con una superficie quadratica e rimosso, poi soglia automatica (Otsu).
-- **Vettorializzazione**: marching squares con interpolazione sub-pixel, semplificazione Douglas–Peucker, angoli vivi preservati e curve di Bézier sul resto.
-- **Linea singola**: assottigliamento Zhang–Suen dell'inchiostro, scheletro diviso in rami tra estremi e incroci, rimozione dei rami spuri, estremi riallungati di mezzo tratto; i tracciati aperti escono come linee non chiuse nell'SVG.
+1. Pick the format (A4 or A3) and open the printable frame. Print it at 100%: the reference line at the bottom must measure 100 mm.
+2. For a rigid frame, glue it to card or thin plastic and cut along the black lines (outer edge and central window). Or use the sheet as it is and draw inside the window.
+3. Lay the frame over the drawing (dark marker on white paper) or the object, which must sit inside the window.
+4. Take the photo with the whole frame in view. The app finds the markers, corrects the perspective and traces the outlines.
+5. Adjust threshold, straightening and smoothing, then download the SVG (units in millimetres).
 
-Tutto gira nel browser, nessun server.
+## How it works
 
-## Sviluppo
+- **Markers**: four ArUco `ARUCO_MIP_36h12` markers (ids 0–3) detected with [js-aruco2](https://github.com/damianofalcioni/js-aruco2) (bundled in `src/vendor`), then refined to sub-pixel accuracy by fitting a line to each side.
+- **Perspective**: least-squares homography over the 16 marker corners; the frame window is resampled at 5 px/mm.
+- **Lighting**: the paper background is estimated with a quadratic surface and removed, then an automatic threshold (Otsu) is applied.
+- **Vectorisation**: marching squares with sub-pixel interpolation, Douglas–Peucker simplification, sharp corners preserved and Bézier curves everywhere else.
+- **Single line**: Zhang–Suen thinning of the ink, skeleton split into branches between ends and junctions, spurious branches removed, ends extended by half a stroke; the open paths are exported as unclosed lines in the SVG.
+
+Everything runs in the browser, no server.
+
+## Development
 
 ```bash
 npm install
-npm run dev     # server locale, raggiungibile anche dal telefono nella stessa rete
-npm test        # test su foto sintetiche in prospettiva
+npm run dev     # local server, also reachable from a phone on the same network
+npm test        # tests on synthetic photos in perspective
 npm run build
 ```
 
-Per provarla dal telefono basta `npm run dev` e aprire l'indirizzo di rete sulla stessa Wi-Fi. Per installarla come app serve HTTPS: il workflow `.github/workflows/pages.yml` pubblica l'app su GitHub Pages a ogni push su `main` (in Settings → Pages scegli "GitHub Actions" come sorgente).
+To try it on a phone, run `npm run dev` and open the network address on the same Wi-Fi. Installing it as an app needs HTTPS: the `.github/workflows/pages.yml` workflow publishes the app to GitHub Pages on every push to `main` (in Settings → Pages choose "GitHub Actions" as the source).
 
-## Limiti noti
+## Known limitations
 
-- Lo spessore del supporto rigido solleva i marker sopra il disegno: con 2 mm di cartone e il telefono a 40 cm l'errore di scala è circa 0,5%. Meglio supporti sottili.
-- Gli oggetti 3D proiettano ombre e il loro bordo superiore risulta più grande per la prospettiva: meglio luce dall'alto e oggetti bassi.
-- In modalità "linea singola" gli incroci tra tratti spessi possono spostarsi leggermente verso il centro della macchia d'inchiostro.
+- The thickness of a rigid backing lifts the markers above the drawing: with 2 mm card and the phone at 40 cm the scale error is about 0.5%. Thin backings work best.
+- 3D objects cast shadows, and their top edge looks larger because of perspective: light from above and low objects work best.
+- In "single line" mode, crossings between thick strokes can shift slightly towards the centre of the ink blob.
 
-## Licenza
+## License
 
-ShapesCraft è distribuito con licenza [GNU AGPL-3.0](LICENSE) (`AGPL-3.0-only`). Copyright © 2026 Alessandro Devigili.
+ShapesCraft is released under the [GNU AGPL-3.0](LICENSE) license (`AGPL-3.0-only`). Copyright © 2026 Alessandro Devigili.
 
-Il codice in `src/vendor/js-aruco2/` resta sotto la sua licenza originale (MIT, con parti derivate da OpenCV sotto licenza BSD): vedi [`src/vendor/js-aruco2/LICENSE.txt`](src/vendor/js-aruco2/LICENSE.txt).
+The code in `src/vendor/js-aruco2/` keeps its original license (MIT, with parts derived from OpenCV under the BSD license): see [`src/vendor/js-aruco2/LICENSE.txt`](src/vendor/js-aruco2/LICENSE.txt).
