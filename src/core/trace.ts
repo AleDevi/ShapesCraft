@@ -87,6 +87,100 @@ export function signedArea(poly: Point[]): number {
   return s / 2;
 }
 
+/**
+ * Removes bumps and noise shorter than about `scale` from a raw contour while
+ * keeping its overall shape: curves stay round and sharp corners stay sharp.
+ * Corners (turns above `cornerDeg` at that scale) are pinned; the stretches
+ * between them are resampled at `scale / 8` and low-pass filtered with Taubin
+ * smoothing, which unlike plain averaging does not shrink the shape.
+ */
+export function smoothContour(loop: Point[], scale: number, cornerDeg: number): Point[] {
+  const n = loop.length;
+  if (scale <= 0 || n < 8) return loop;
+  const reach = scale / 2;
+  const angle = loop.map((_, i) => turnAngle(loop, i, reach));
+  // Keep only the sharpest point of each corner region.
+  const corners: number[] = [];
+  for (let i = 0; i < n; i++) {
+    if (angle[i] <= cornerDeg) continue;
+    let isMax = true;
+    for (const dir of [-1, 1]) {
+      for (let k = 1; k < n && isMax; k++) {
+        const j = (((i + dir * k) % n) + n) % n;
+        if (dist(loop[i], loop[j]) > reach) break;
+        if (angle[j] > angle[i] || (angle[j] === angle[i] && j < i)) isMax = false;
+      }
+    }
+    if (isMax) corners.push(i);
+  }
+
+  const step = Math.max(1, scale / 8);
+  const pts: Point[] = [];
+  const pinned: boolean[] = [];
+  const stretches = corners.length
+    ? corners.map((c, k) => [c, corners[(k + 1) % corners.length]])
+    : [[0, 0]];
+  for (const [a, b] of stretches) {
+    // Collect the raw points from corner a up to (not including) corner b.
+    const raw: Point[] = [];
+    let j = a;
+    do {
+      raw.push(loop[j]);
+      j = (j + 1) % n;
+    } while (j !== b);
+    raw.push(loop[b]);
+    const res = resample(raw, step);
+    res.pop(); // the end point starts the next stretch
+    res.forEach((p, k) => {
+      pts.push(p);
+      pinned.push(corners.length > 0 && k === 0);
+    });
+  }
+  if (pts.length < 8) return loop;
+
+  const m = pts.length;
+  let cur = pts;
+  for (let iter = 0; iter < 30; iter++) {
+    for (const f of [0.5, -0.53]) {
+      const next = cur.slice();
+      for (let i = 0; i < m; i++) {
+        if (pinned[i]) continue;
+        const a = cur[(i + m - 1) % m];
+        const b = cur[(i + 1) % m];
+        next[i] = { x: cur[i].x + f * ((a.x + b.x) / 2 - cur[i].x), y: cur[i].y + f * ((a.y + b.y) / 2 - cur[i].y) };
+      }
+      cur = next;
+    }
+  }
+  return cur;
+}
+
+/** Points along an open polyline at roughly equal arc-length spacing, endpoints kept. */
+function resample(line: Point[], step: number): Point[] {
+  let total = 0;
+  for (let i = 1; i < line.length; i++) total += dist(line[i - 1], line[i]);
+  const count = Math.max(1, Math.round(total / step));
+  const spacing = total / count;
+  const out: Point[] = [line[0]];
+  let seg = 1;
+  let along = 0; // distance travelled before line[seg - 1]
+  for (let k = 1; k < count; k++) {
+    const target = k * spacing;
+    while (seg < line.length - 1 && along + dist(line[seg - 1], line[seg]) < target) {
+      along += dist(line[seg - 1], line[seg]);
+      seg++;
+    }
+    const len = dist(line[seg - 1], line[seg]) || 1;
+    const t = (target - along) / len;
+    out.push({
+      x: line[seg - 1].x + (line[seg].x - line[seg - 1].x) * t,
+      y: line[seg - 1].y + (line[seg].y - line[seg - 1].y) * t,
+    });
+  }
+  out.push(line[line.length - 1]);
+  return out;
+}
+
 /** Ramer–Douglas–Peucker on a closed polygon. */
 export function simplifyClosed(poly: Point[], tolerance: number): Point[] {
   if (poly.length < 4) return poly;
@@ -144,9 +238,12 @@ export interface PathShape { start: Point; segments: Segment[] }
  * outline turns by more than `cornerDeg` (measured over `reach`, so a corner
  * split into a few close vertices still counts as one) stay sharp; everything
  * else becomes Catmull-Rom curves with tangents scaled to each side's length,
- * which keeps short sides from overshooting.
+ * which keeps short sides from overshooting. A vertex whose curve would bulge
+ * more than `1.25·tolerance` away from the polygon (a gentle bend between two
+ * long straight sides) is made a corner too, since the polygon already stays
+ * within `tolerance` of the traced edge.
  */
-export function smoothPath(input: Point[], cornerDeg: number, reach: number): PathShape {
+export function smoothPath(input: Point[], cornerDeg: number, reach: number, tolerance: number): PathShape {
   const poly = mergeCorners(input, cornerDeg, reach);
   const n = poly.length;
   const at = (i: number) => poly[((i % n) + n) % n];
@@ -156,6 +253,20 @@ export function smoothPath(input: Point[], cornerDeg: number, reach: number): Pa
     const l = Math.hypot(b.x - a.x, b.y - a.y) || 1;
     return { x: (b.x - a.x) / l, y: (b.y - a.y) / l };
   };
+  // Outgoing / incoming tangent at a smooth vertex: parallel to its neighbours' chord.
+  const tangent = (i: number) => unit(at(i - 1), at(i + 1));
+  // Distance from the side p1→p2 of a control point placed along tangent t, a third of the side away.
+  const bulge = (p1: Point, p2: Point, t: Point) => {
+    const d = unit(p1, p2);
+    return (Math.abs(t.x * d.y - t.y * d.x) * Math.hypot(p2.x - p1.x, p2.y - p1.y)) / 3;
+  };
+  for (let i = 0; i < n; i++) {
+    if (corner[i]) continue;
+    const t = tangent(i);
+    // A cubic Bézier stays within 3/4 of its control points' offset.
+    if (0.75 * Math.max(bulge(at(i), at(i + 1), t), bulge(at(i), at(i - 1), t)) > 1.25 * tolerance) corner[i] = true;
+  }
+
   const segments: Segment[] = [];
   for (let i = 0; i < n; i++) {
     const p1 = at(i);
@@ -167,8 +278,8 @@ export function smoothPath(input: Point[], cornerDeg: number, reach: number): Pa
       continue;
     }
     const len = Math.hypot(p2.x - p1.x, p2.y - p1.y) / 3;
-    const t1 = c1 ? unit(p1, p2) : unit(at(i - 1), p2);
-    const t2 = c2 ? unit(p1, p2) : unit(p1, at(i + 2));
+    const t1 = c1 ? unit(p1, p2) : tangent(i);
+    const t2 = c2 ? unit(p1, p2) : tangent(i + 1);
     segments.push({
       kind: 'C',
       c1: { x: p1.x + t1.x * len, y: p1.y + t1.y * len },

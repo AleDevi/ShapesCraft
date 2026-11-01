@@ -90,7 +90,7 @@ export function boxBlur(g: Gray, radius: number, passes = 1): Gray {
  * bright cells of the image, then divides it out. This removes gradients from
  * uneven light while staying robust to large dark objects on the sheet.
  */
-export function flattenIllumination(g: Gray, cell: number, mask?: Uint8Array): Gray {
+export function flattenIllumination(g: Gray, cell: number): Gray {
   const cw = Math.max(1, Math.floor(g.width / cell));
   const ch = Math.max(1, Math.floor(g.height / cell));
   const samples: { x: number; y: number; v: number }[] = [];
@@ -99,10 +99,7 @@ export function flattenIllumination(g: Gray, cell: number, mask?: Uint8Array): G
       // The 90th percentile of the cell tracks paper, not ink.
       const vals: number[] = [];
       for (let y = cy * cell; y < (cy + 1) * cell && y < g.height; y++)
-        for (let x = cx * cell; x < (cx + 1) * cell && x < g.width; x++) {
-          const i = y * g.width + x;
-          if (!mask || !mask[i]) vals.push(g.data[i]);
-        }
+        for (let x = cx * cell; x < (cx + 1) * cell && x < g.width; x++) vals.push(g.data[y * g.width + x]);
       if (vals.length < (cell * cell) / 4) continue;
       vals.sort((a, b) => a - b);
       samples.push({ x: (cx + 0.5) / cw, y: (cy + 0.5) / ch, v: vals[Math.floor(vals.length * 0.9)] });
@@ -160,13 +157,12 @@ function solveSmall(a: number[][], b: number[]): number[] {
   return m.map((r, i) => r[n] / r[i]);
 }
 
-/** Otsu threshold over the unmasked pixels. */
-export function otsu(g: Gray, mask?: Uint8Array): number {
+/** Otsu threshold. */
+export function otsu(g: Gray): number {
   const bins = 256;
   const hist = new Float64Array(bins);
   let total = 0;
   for (let i = 0; i < g.data.length; i++) {
-    if (mask && mask[i]) continue;
     hist[Math.min(bins - 1, Math.max(0, Math.floor(g.data[i] * (bins - 1))))]++;
     total++;
   }

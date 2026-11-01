@@ -3,6 +3,7 @@ import { frameById, frameSvg } from '../src/core/frame';
 import { applyH, findHomography } from '../src/core/homography';
 import { detectFrame, prepare, rectify, trace, DEFAULT_TRACE } from '../src/core/pipeline';
 import { exportSvg } from '../src/core/svg';
+import { smoothContour, smoothPath } from '../src/core/trace';
 import { renderPhoto } from './synthetic';
 
 describe('homography', () => {
@@ -25,20 +26,20 @@ describe('homography', () => {
 
 describe('frame', () => {
   it('prints at real size', () => {
-    const svg = frameSvg(frameById('a3'));
-    expect(svg).toContain('width="297mm" height="420mm"');
+    expect(frameSvg(frameById('a4'))).toContain('width="210mm" height="297mm"');
+    expect(frameSvg(frameById('a3'))).toContain('width="297mm" height="420mm"');
   });
 });
 
-describe('pipeline on a synthetic photo', () => {
-  // A circle of radius 40 mm and a 60×30 mm rectangle with a 20×10 mm hole.
-  const circle = { x: 150, y: 220, r: 40 };
+describe.each(['a4', 'a3'])('pipeline on a synthetic photo of the %s frame', (frameId) => {
+  // A circle of radius 40 mm and a 60×30 mm rectangle with a 20×10 mm hole, inside both windows.
+  const circle = { x: 105, y: 190, r: 40 };
   const drawing = (x: number, y: number) =>
     Math.hypot(x - circle.x, y - circle.y) <= circle.r ||
     (x >= 60 && x <= 120 && y >= 80 && y <= 110 && !(x >= 80 && x <= 100 && y >= 90 && y <= 100));
 
   const { photo, sheetToPhoto } = renderPhoto(
-    'a3',
+    frameId,
     drawing,
     { width: 2400, height: 3000 },
     [
@@ -49,12 +50,12 @@ describe('pipeline on a synthetic photo', () => {
     ],
     (x, y) => 0.75 + 0.25 * x - 0.1 * y,
   );
-  const frame = frameById('a3');
+  const frame = frameById(frameId);
 
   it('finds all four markers and the right geometry', { timeout: 60000 }, () => {
     const det = detectFrame(photo, frame);
     expect(det.markerIds).toEqual([0, 1, 2, 3]);
-    for (const p of [{ x: 0, y: 0 }, { x: 297, y: 420 }, { x: 150, y: 220 }]) {
+    for (const p of [{ x: 0, y: 0 }, { x: frame.width, y: frame.height }, { x: 105, y: 190 }]) {
       const a = applyH(det.sheetToPhoto, p);
       const b = applyH(sheetToPhoto, p);
       expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeLessThan(0.5);
@@ -83,8 +84,8 @@ describe('pipeline on a synthetic photo', () => {
     expect(Math.min(...xs)).toBeCloseTo(60, 0);
 
     const svg = exportSvg(out.shapes, out.polygons);
-    // Bounding box: rectangle at x=60 to circle edge at x=190, plus 2 mm padding per side.
-    expect(svg).toMatch(/width="13[34]\.\d+mm"/);
+    // Bounding box: rectangle at x=60 to circle edge at x=145, plus 2 mm padding per side.
+    expect(svg).toMatch(/width="8[89]\.\d+mm"/);
     expect(svg.match(/<path /g)).toHaveLength(3);
 
     // Curves must not overshoot the rectangle: every control point stays inside it.
@@ -97,5 +98,74 @@ describe('pipeline on a synthetic photo', () => {
         expect(p.y).toBeLessThan(110.5);
       }
     }
+  });
+});
+
+describe('smoothPath', () => {
+  // Simplified polygon of a circle (R 40 mm) at the coarsest straightening setting.
+  const R = 40;
+  const tol = 3;
+  const step = 2 * Math.acos(1 - tol / R);
+  const n = Math.ceil((2 * Math.PI) / step);
+  const circle = Array.from({ length: n }, (_, i) => ({
+    x: R * Math.cos((i * 2 * Math.PI) / n),
+    y: R * Math.sin((i * 2 * Math.PI) / n),
+  }));
+
+  it('keeps a coarse circle smooth', () => {
+    const path = smoothPath(circle, 50, 1, tol);
+    expect(path.segments.every((s) => s.kind === 'C')).toBe(true);
+  });
+
+  it('keeps a gentle bend between long straight sides sharp', () => {
+    // Wall and roof of a house: the 35° bend at (0, 0) must not become a bulge.
+    const house = [
+      { x: 0, y: 60 }, { x: 0, y: 0 }, { x: 28.7, y: -41 }, { x: 60, y: 0 }, { x: 60, y: 60 },
+    ];
+    const path = smoothPath(house, 50, 1, 1.5);
+    const wall = path.segments[0];
+    expect(wall.kind).toBe('L');
+  });
+});
+
+describe('smoothContour', () => {
+  it('removes bumps from a circle without shrinking it', () => {
+    const R = 200;
+    const bumpy = Array.from({ length: 1200 }, (_, i) => {
+      const a = (i / 1200) * 2 * Math.PI;
+      const r = R + 3 * Math.sin(a * 60) + 1.5 * Math.sin(a * 137);
+      return { x: r * Math.cos(a), y: r * Math.sin(a) };
+    });
+    const out = smoothContour(bumpy, 40, 50);
+    const radii = out.map((p) => Math.hypot(p.x, p.y));
+    const mean = radii.reduce((a, b) => a + b, 0) / radii.length;
+    expect(Math.abs(mean - R)).toBeLessThan(1);
+    expect(Math.max(...radii.map((r) => Math.abs(r - R)))).toBeLessThan(1.2);
+  });
+
+  it('keeps the corners of a noisy square', () => {
+    const side = 400;
+    const pts = [];
+    for (let k = 0; k < 4; k++)
+      for (let i = 0; i < 400; i++) {
+        const t = i / 400;
+        const noise = 2 * Math.sin(i * 0.9);
+        const p = [
+          { x: t * side, y: noise },
+          { x: side + noise, y: t * side },
+          { x: side - t * side, y: side + noise },
+          { x: noise, y: side - t * side },
+        ][k];
+        pts.push(p);
+      }
+    const out = smoothContour(pts, 40, 50);
+    for (const c of [{ x: 0, y: 0 }, { x: side, y: 0 }, { x: side, y: side }, { x: 0, y: side }]) {
+      const nearest = Math.min(...out.map((p) => Math.hypot(p.x - c.x, p.y - c.y)));
+      expect(nearest).toBeLessThan(3);
+    }
+    // Away from the (pinned, noisy) corners, sides are flattened to within half the noise.
+    const inner = out.filter((p) => Math.min(p.x, side - p.x) > 20 || Math.min(p.y, side - p.y) > 20);
+    const offSide = inner.map((p) => Math.min(Math.abs(p.y), Math.abs(p.x - side), Math.abs(p.y - side), Math.abs(p.x)));
+    expect(Math.max(...offSide)).toBeLessThan(1);
   });
 });

@@ -32,7 +32,7 @@ const controls = {
   threshold: $<HTMLInputElement>('threshold'),
   tolerance: $<HTMLInputElement>('tolerance'),
   minarea: $<HTMLInputElement>('minarea'),
-  blur: $<HTMLInputElement>('blur'),
+  smooth: $<HTMLInputElement>('smooth'),
   invert: $<HTMLInputElement>('invert'),
   showPhoto: $<HTMLInputElement>('show-photo'),
 };
@@ -47,12 +47,13 @@ interface Session {
 let session: Session | null = null;
 
 for (const f of FRAMES) frameSelect.add(new Option(f.name, f.id));
-frameSelect.value = localStorageGet('frame') ?? 'a3';
+const savedFrame = localStorageGet('frame');
+frameSelect.value = FRAMES.some((f) => f.id === savedFrame) ? savedFrame! : 'a4';
 frameSelect.addEventListener('change', () => localStorageSet('frame', frameSelect.value));
 
 controls.tolerance.value = String(DEFAULT_TRACE.toleranceMm);
 controls.minarea.value = String(DEFAULT_TRACE.minAreaMm2);
-controls.blur.value = String(DEFAULT_TRACE.blurMm);
+controls.smooth.value = String(DEFAULT_TRACE.smoothMm);
 controls.invert.checked = DEFAULT_TRACE.invert;
 
 $('print-frame').addEventListener('click', () => {
@@ -60,7 +61,7 @@ $('print-frame').addEventListener('click', () => {
   const blob = new Blob([frameSvg(frame)], { type: 'image/svg+xml' });
   const url = URL.createObjectURL(blob);
   // Opening the SVG on its own lets the browser print it at its real size in mm.
-  if (!window.open(url, '_blank')) download(blob, `cornice-shapescraft-${frame.id}.svg`);
+  if (!window.open(url, '_blank')) void download(blob, `cornice-shapescraft-${frame.id}.svg`);
 });
 
 for (const id of ['camera', 'upload']) {
@@ -73,7 +74,7 @@ for (const id of ['camera', 'upload']) {
 }
 
 let pending = 0;
-for (const el of [controls.threshold, controls.tolerance, controls.minarea, controls.blur, controls.invert]) {
+for (const el of [controls.threshold, controls.tolerance, controls.minarea, controls.smooth, controls.invert]) {
   el.addEventListener('input', () => {
     updateOutputs();
     // Coalesce slider drags into one re-trace per frame.
@@ -93,7 +94,7 @@ $('download').addEventListener('click', () => {
   if (!session?.traced) return;
   const svg = exportSvg(session.traced.shapes, session.traced.polygons);
   const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
-  download(new Blob([svg], { type: 'image/svg+xml' }), `shapescraft-${stamp}.svg`);
+  void download(new Blob([svg], { type: 'image/svg+xml' }), `shapescraft-${stamp}.svg`);
 });
 
 updateOutputs();
@@ -148,7 +149,7 @@ function options(): TraceOptions {
     threshold: Number(controls.threshold.value),
     toleranceMm: Number(controls.tolerance.value),
     minAreaMm2: Number(controls.minarea.value),
-    blurMm: Number(controls.blur.value),
+    smoothMm: Number(controls.smooth.value),
     invert: controls.invert.checked,
   };
 }
@@ -188,7 +189,7 @@ function updateOutputs() {
   $<HTMLOutputElement>('threshold-out').value = Number(controls.threshold.value || 0).toFixed(2);
   $<HTMLOutputElement>('tolerance-out').value = `${controls.tolerance.value} mm`;
   $<HTMLOutputElement>('minarea-out').value = `${controls.minarea.value} mm²`;
-  $<HTMLOutputElement>('blur-out').value = `${controls.blur.value} mm`;
+  $<HTMLOutputElement>('smooth-out').value = Number(controls.smooth.value) ? `${controls.smooth.value} mm` : 'no';
 }
 
 async function grayUrl(r: Rectified): Promise<string> {
@@ -213,7 +214,28 @@ function nextFrame() {
   return new Promise((res) => requestAnimationFrame(() => setTimeout(res, 0)));
 }
 
-function download(blob: Blob, name: string) {
+interface DownloadsCapability {
+  save(req: { filename: string; data: Blob }): Promise<unknown>;
+}
+type ClaudeHost = { use(name: 'downloads'): Promise<DownloadsCapability | null> };
+
+/**
+ * Saves a file. Inside a claude.ai artifact the sandbox blocks plain downloads,
+ * so the viewer's `downloads` capability is used there instead.
+ */
+async function download(blob: Blob, name: string) {
+  const host = (window as unknown as { claude?: ClaudeHost }).claude;
+  if (host) {
+    const downloads = await host.use('downloads');
+    if (downloads) {
+      try {
+        await downloads.save({ filename: name, data: blob });
+      } catch (err) {
+        if ((err as { code?: string }).code !== 'declined') setStatus('Non riesco a salvare il file in questa pagina.', true);
+      }
+      return;
+    }
+  }
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = name;

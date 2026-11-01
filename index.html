@@ -23,7 +23,8 @@
         </label>
         <p class="hint">
           Stampa la cornice al 100% (senza "adatta alla pagina") e controlla che la linea di riferimento misuri 100 mm.
-          Disegna o appoggia l'oggetto dentro i quattro quadrati neri.
+          Per una cornice rigida incollala su cartoncino o plastica sottile e ritaglia bordo esterno e finestra.
+          Poi appoggiala sul disegno o sull'oggetto (su fondo bianco), che deve stare dentro la finestra.
         </p>
         <div class="buttons">
           <button id="print-frame" type="button" class="secondary">Apri cornice da stampare</button>
@@ -58,16 +59,18 @@
           </label>
           <button id="threshold-auto" type="button" class="link">Automatica</button>
           <label>
-            <span>Precisione <output id="tolerance-out"></output></span>
-            <input id="tolerance" type="range" min="0.05" max="1" step="0.05" />
+            <span>Raddrizza linee <output id="tolerance-out"></output></span>
+            <input id="tolerance" type="range" min="0.1" max="3" step="0.1" />
+            <small class="hint">A sinistra segue fedelmente il tratto, a destra toglie le irregolarità e raddrizza.</small>
           </label>
           <label>
             <span>Ignora forme sotto <output id="minarea-out"></output></span>
             <input id="minarea" type="range" min="0" max="100" step="1" />
           </label>
           <label>
-            <span>Ammorbidisci bordi <output id="blur-out"></output></span>
-            <input id="blur" type="range" min="0" max="1.5" step="0.1" />
+            <span>Levigatura <output id="smooth-out"></output></span>
+            <input id="smooth" type="range" min="0" max="10" step="0.5" />
+            <small class="hint">A sinistra segue ogni dettaglio, a destra toglie bozzi e rumore mantenendo curve e spigoli.</small>
           </label>
           <label class="check"><input id="invert" type="checkbox" /> Forme chiare su fondo scuro</label>
           <label class="check"><input id="show-photo" type="checkbox" checked /> Mostra foto sotto i tracciati</label>
