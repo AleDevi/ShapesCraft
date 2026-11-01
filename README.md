@@ -2,6 +2,10 @@
 
 **English** · [Italiano](README.it.md)
 
+### 👉 [**Open the app: aledevi.github.io/ShapesCraft**](https://aledevi.github.io/ShapesCraft/)
+
+No install, no sign-up: it runs in the browser on phone, tablet and computer.
+
 A web app (PWA) that turns a photo of a drawing or an object laid on a printed frame into a true-scale SVG vector, ready for a laser cutter, CNC or cutting plotter.
 
 The app is available in English and Italian: it follows the phone's language, and you can switch it from the menu at the top.
