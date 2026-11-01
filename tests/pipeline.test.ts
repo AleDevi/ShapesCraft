@@ -3,7 +3,7 @@ import { frameById, frameSvg } from '../src/core/frame';
 import { applyH, findHomography } from '../src/core/homography';
 import { detectFrame, prepare, rectify, trace, DEFAULT_TRACE } from '../src/core/pipeline';
 import { exportSvg } from '../src/core/svg';
-import { smoothPath } from '../src/core/trace';
+import { smoothContour, smoothPath } from '../src/core/trace';
 import { renderPhoto } from './synthetic';
 
 describe('homography', () => {
@@ -125,5 +125,47 @@ describe('smoothPath', () => {
     const path = smoothPath(house, 50, 1, 1.5);
     const wall = path.segments[0];
     expect(wall.kind).toBe('L');
+  });
+});
+
+describe('smoothContour', () => {
+  it('removes bumps from a circle without shrinking it', () => {
+    const R = 200;
+    const bumpy = Array.from({ length: 1200 }, (_, i) => {
+      const a = (i / 1200) * 2 * Math.PI;
+      const r = R + 3 * Math.sin(a * 60) + 1.5 * Math.sin(a * 137);
+      return { x: r * Math.cos(a), y: r * Math.sin(a) };
+    });
+    const out = smoothContour(bumpy, 40, 50);
+    const radii = out.map((p) => Math.hypot(p.x, p.y));
+    const mean = radii.reduce((a, b) => a + b, 0) / radii.length;
+    expect(Math.abs(mean - R)).toBeLessThan(1);
+    expect(Math.max(...radii.map((r) => Math.abs(r - R)))).toBeLessThan(1.2);
+  });
+
+  it('keeps the corners of a noisy square', () => {
+    const side = 400;
+    const pts = [];
+    for (let k = 0; k < 4; k++)
+      for (let i = 0; i < 400; i++) {
+        const t = i / 400;
+        const noise = 2 * Math.sin(i * 0.9);
+        const p = [
+          { x: t * side, y: noise },
+          { x: side + noise, y: t * side },
+          { x: side - t * side, y: side + noise },
+          { x: noise, y: side - t * side },
+        ][k];
+        pts.push(p);
+      }
+    const out = smoothContour(pts, 40, 50);
+    for (const c of [{ x: 0, y: 0 }, { x: side, y: 0 }, { x: side, y: side }, { x: 0, y: side }]) {
+      const nearest = Math.min(...out.map((p) => Math.hypot(p.x - c.x, p.y - c.y)));
+      expect(nearest).toBeLessThan(3);
+    }
+    // Away from the (pinned, noisy) corners, sides are flattened to within half the noise.
+    const inner = out.filter((p) => Math.min(p.x, side - p.x) > 20 || Math.min(p.y, side - p.y) > 20);
+    const offSide = inner.map((p) => Math.min(Math.abs(p.y), Math.abs(p.x - side), Math.abs(p.y - side), Math.abs(p.x)));
+    expect(Math.max(...offSide)).toBeLessThan(1);
   });
 });

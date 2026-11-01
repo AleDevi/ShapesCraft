@@ -32,7 +32,7 @@ const controls = {
   threshold: $<HTMLInputElement>('threshold'),
   tolerance: $<HTMLInputElement>('tolerance'),
   minarea: $<HTMLInputElement>('minarea'),
-  blur: $<HTMLInputElement>('blur'),
+  smooth: $<HTMLInputElement>('smooth'),
   invert: $<HTMLInputElement>('invert'),
   showPhoto: $<HTMLInputElement>('show-photo'),
 };
@@ -53,7 +53,7 @@ frameSelect.addEventListener('change', () => localStorageSet('frame', frameSelec
 
 controls.tolerance.value = String(DEFAULT_TRACE.toleranceMm);
 controls.minarea.value = String(DEFAULT_TRACE.minAreaMm2);
-controls.blur.value = String(DEFAULT_TRACE.blurMm);
+controls.smooth.value = String(DEFAULT_TRACE.smoothMm);
 controls.invert.checked = DEFAULT_TRACE.invert;
 
 $('print-frame').addEventListener('click', () => {
@@ -74,7 +74,7 @@ for (const id of ['camera', 'upload']) {
 }
 
 let pending = 0;
-for (const el of [controls.threshold, controls.tolerance, controls.minarea, controls.blur, controls.invert]) {
+for (const el of [controls.threshold, controls.tolerance, controls.minarea, controls.smooth, controls.invert]) {
   el.addEventListener('input', () => {
     updateOutputs();
     // Coalesce slider drags into one re-trace per frame.
@@ -149,7 +149,7 @@ function options(): TraceOptions {
     threshold: Number(controls.threshold.value),
     toleranceMm: Number(controls.tolerance.value),
     minAreaMm2: Number(controls.minarea.value),
-    blurMm: Number(controls.blur.value),
+    smoothMm: Number(controls.smooth.value),
     invert: controls.invert.checked,
   };
 }
@@ -189,7 +189,7 @@ function updateOutputs() {
   $<HTMLOutputElement>('threshold-out').value = Number(controls.threshold.value || 0).toFixed(2);
   $<HTMLOutputElement>('tolerance-out').value = `${controls.tolerance.value} mm`;
   $<HTMLOutputElement>('minarea-out').value = `${controls.minarea.value} mm²`;
-  $<HTMLOutputElement>('blur-out').value = `${controls.blur.value} mm`;
+  $<HTMLOutputElement>('smooth-out').value = Number(controls.smooth.value) ? `${controls.smooth.value} mm` : 'no';
 }
 
 async function grayUrl(r: Rectified): Promise<string> {

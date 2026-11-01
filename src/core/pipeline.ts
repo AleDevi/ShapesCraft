@@ -10,7 +10,7 @@ import {
   sampleBilinear,
   type Gray,
 } from './image';
-import { isoContours, signedArea, simplifyClosed, smoothPath, type PathShape } from './trace';
+import { isoContours, signedArea, simplifyClosed, smoothContour, smoothPath, type PathShape } from './trace';
 
 export interface Detection {
   /** Maps sheet millimetres to photo pixels. */
@@ -186,6 +186,8 @@ export interface TraceOptions {
   cornerDeg: number;
   /** Noise-reduction blur radius, in mm. */
   blurMm: number;
+  /** Bumps shorter than this are smoothed out of the outline, in mm (0 = follow every detail). */
+  smoothMm: number;
 }
 
 export const DEFAULT_TRACE: Omit<TraceOptions, 'threshold'> = {
@@ -194,6 +196,7 @@ export const DEFAULT_TRACE: Omit<TraceOptions, 'threshold'> = {
   toleranceMm: 0.2,
   cornerDeg: 50,
   blurMm: 0.3,
+  smoothMm: 0,
 };
 
 /** Traced outlines in sheet millimetres. */
@@ -218,7 +221,8 @@ export function trace(p: Prepared, r: Rectified, opts: TraceOptions): Traced {
   const polygons: Point[][] = [];
   for (const loop of isoContours(field, level)) {
     if (Math.abs(signedArea(loop)) < minAreaPx) continue;
-    const simple = simplifyClosed(loop, opts.toleranceMm * r.pxPerMm);
+    const smooth = smoothContour(loop, opts.smoothMm * r.pxPerMm, opts.cornerDeg);
+    const simple = simplifyClosed(smooth, opts.toleranceMm * r.pxPerMm);
     if (simple.length < 3) continue;
     polygons.push(simple.map(toMm));
   }
