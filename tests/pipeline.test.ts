@@ -104,6 +104,13 @@ describe.each(['a4', 'a3'])('pipeline on a synthetic photo of the %s frame', (fr
     expect(svg).toMatch(/width="8[89]\.\d+mm"/);
     expect(svg.match(/<path /g)).toHaveLength(3);
 
+    // Filled: one solid even-odd path holding all three outlines, so the hole stays open.
+    const filled = exportSvg(out.shapes, out.polygons, 2, true);
+    expect(filled.match(/<path /g)).toHaveLength(1);
+    expect(filled).toContain('fill="#000" fill-rule="evenodd"');
+    expect(filled.match(/Z/g)).toHaveLength(3);
+    expect(filled).not.toContain('stroke=');
+
     // Curves must not overshoot the rectangle: every control point stays inside it.
     const rectPath = out.shapes[out.polygons.indexOf(outer)];
     for (const s of rectPath.segments) {

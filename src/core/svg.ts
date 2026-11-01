@@ -27,19 +27,25 @@ export function boundingBox(polygons: Point[][]) {
 /**
  * SVG in real millimetres, cropped to the traced shapes plus `padding`.
  * Outlines are hairline strokes with no fill, the form laser and CNC software expects.
+ * With `filled`, closed shapes become one solid black path whose even-odd rule
+ * keeps holes open; open lines stay strokes, since they have no inside.
  */
-export function exportSvg(shapes: PathShape[], polygons: Point[][], padding = 2): string {
+export function exportSvg(shapes: PathShape[], polygons: Point[][], padding = 2, filled = false): string {
   const box = boundingBox(polygons);
   if (!polygons.length) return '<svg xmlns="http://www.w3.org/2000/svg" width="10mm" height="10mm" viewBox="0 0 10 10"/>';
   const origin = { x: box.minX - padding, y: box.minY - padding };
   const w = box.maxX - box.minX + 2 * padding;
   const h = box.maxY - box.minY + 2 * padding;
-  const paths = shapes.map((s) => `  <path d="${pathData(s, origin)}"/>`);
+  const stroked = filled ? shapes.filter((s) => !s.closed) : shapes;
+  const solid = filled ? shapes.filter((s) => s.closed) : [];
+  const body: string[] = [];
+  if (solid.length) body.push(`<path d="${solid.map((s) => pathData(s, origin)).join(' ')}" fill="#000" fill-rule="evenodd"/>`);
+  if (stroked.length) {
+    body.push(`<g fill="none" stroke="#000" stroke-width="0.1">`, ...stroked.map((s) => `  <path d="${pathData(s, origin)}"/>`), '</g>');
+  }
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${fmt(w)}mm" height="${fmt(h)}mm" viewBox="0 0 ${fmt(w)} ${fmt(h)}">`,
-    `<g fill="none" stroke="#000" stroke-width="0.1">`,
-    ...paths,
-    '</g>',
+    ...body,
     '</svg>',
   ].join('\n');
 }

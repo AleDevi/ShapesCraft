@@ -160,6 +160,16 @@ button.link {
 .controls input[type='range'] { width: 100%; }
 .controls .check { display: flex; align-items: center; gap: 8px; }
 .controls .check-hint { margin: -8px 0 0 28px; }
+#fill-hint { margin: -8px 0 0; }
+
+/* Two-option switch: the radios stay in the DOM for keyboard and screen readers. */
+.segmented { display: grid; gap: 6px; font-size: 0.95rem; }
+.segmented > div { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--accent); border-radius: 8px; overflow: hidden; }
+.controls .segmented label { display: flex; align-items: center; justify-content: center; min-height: 40px; cursor: pointer; color: var(--accent); font-weight: 600; position: relative; }
+.segmented input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.segmented label:has(input:checked) { background: var(--accent); color: #fff; }
+.segmented label:has(input:focus-visible) { outline: 2px solid var(--text); outline-offset: -4px; }
+.segmented label:has(input:disabled) { opacity: 0.45; cursor: default; }
 
 .site-footer {
   text-align: center;
