@@ -144,9 +144,12 @@ export interface PathShape { start: Point; segments: Segment[] }
  * outline turns by more than `cornerDeg` (measured over `reach`, so a corner
  * split into a few close vertices still counts as one) stay sharp; everything
  * else becomes Catmull-Rom curves with tangents scaled to each side's length,
- * which keeps short sides from overshooting.
+ * which keeps short sides from overshooting. A vertex whose curve would bulge
+ * more than `1.25·tolerance` away from the polygon (a gentle bend between two
+ * long straight sides) is made a corner too, since the polygon already stays
+ * within `tolerance` of the traced edge.
  */
-export function smoothPath(input: Point[], cornerDeg: number, reach: number): PathShape {
+export function smoothPath(input: Point[], cornerDeg: number, reach: number, tolerance: number): PathShape {
   const poly = mergeCorners(input, cornerDeg, reach);
   const n = poly.length;
   const at = (i: number) => poly[((i % n) + n) % n];
@@ -156,6 +159,20 @@ export function smoothPath(input: Point[], cornerDeg: number, reach: number): Pa
     const l = Math.hypot(b.x - a.x, b.y - a.y) || 1;
     return { x: (b.x - a.x) / l, y: (b.y - a.y) / l };
   };
+  // Outgoing / incoming tangent at a smooth vertex: parallel to its neighbours' chord.
+  const tangent = (i: number) => unit(at(i - 1), at(i + 1));
+  // Distance from the side p1→p2 of a control point placed along tangent t, a third of the side away.
+  const bulge = (p1: Point, p2: Point, t: Point) => {
+    const d = unit(p1, p2);
+    return (Math.abs(t.x * d.y - t.y * d.x) * Math.hypot(p2.x - p1.x, p2.y - p1.y)) / 3;
+  };
+  for (let i = 0; i < n; i++) {
+    if (corner[i]) continue;
+    const t = tangent(i);
+    // A cubic Bézier stays within 3/4 of its control points' offset.
+    if (0.75 * Math.max(bulge(at(i), at(i + 1), t), bulge(at(i), at(i - 1), t)) > 1.25 * tolerance) corner[i] = true;
+  }
+
   const segments: Segment[] = [];
   for (let i = 0; i < n; i++) {
     const p1 = at(i);
@@ -167,8 +184,8 @@ export function smoothPath(input: Point[], cornerDeg: number, reach: number): Pa
       continue;
     }
     const len = Math.hypot(p2.x - p1.x, p2.y - p1.y) / 3;
-    const t1 = c1 ? unit(p1, p2) : unit(at(i - 1), p2);
-    const t2 = c2 ? unit(p1, p2) : unit(p1, at(i + 2));
+    const t1 = c1 ? unit(p1, p2) : tangent(i);
+    const t2 = c2 ? unit(p1, p2) : tangent(i + 1);
     segments.push({
       kind: 'C',
       c1: { x: p1.x + t1.x * len, y: p1.y + t1.y * len },

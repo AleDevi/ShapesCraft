@@ -180,7 +180,7 @@ export interface TraceOptions {
   invert: boolean;
   /** Smallest shape kept, in mm². */
   minAreaMm2: number;
-  /** Maximum deviation from the traced edge, in mm. */
+  /** Maximum deviation from the traced edge, in mm: higher values straighten wobbly hand-drawn lines. */
   toleranceMm: number;
   /** Angles sharper than this stay corners instead of being smoothed. */
   cornerDeg: number;
@@ -222,5 +222,5 @@ export function trace(p: Prepared, r: Rectified, opts: TraceOptions): Traced {
     if (simple.length < 3) continue;
     polygons.push(simple.map(toMm));
   }
-  return { polygons, shapes: polygons.map((poly) => smoothPath(poly, opts.cornerDeg, 1)) };
+  return { polygons, shapes: polygons.map((poly) => smoothPath(poly, opts.cornerDeg, 1, opts.toleranceMm)) };
 }

@@ -3,6 +3,7 @@ import { frameById, frameSvg } from '../src/core/frame';
 import { applyH, findHomography } from '../src/core/homography';
 import { detectFrame, prepare, rectify, trace, DEFAULT_TRACE } from '../src/core/pipeline';
 import { exportSvg } from '../src/core/svg';
+import { smoothPath } from '../src/core/trace';
 import { renderPhoto } from './synthetic';
 
 describe('homography', () => {
@@ -97,5 +98,32 @@ describe.each(['a4', 'a3'])('pipeline on a synthetic photo of the %s frame', (fr
         expect(p.y).toBeLessThan(110.5);
       }
     }
+  });
+});
+
+describe('smoothPath', () => {
+  // Simplified polygon of a circle (R 40 mm) at the coarsest straightening setting.
+  const R = 40;
+  const tol = 3;
+  const step = 2 * Math.acos(1 - tol / R);
+  const n = Math.ceil((2 * Math.PI) / step);
+  const circle = Array.from({ length: n }, (_, i) => ({
+    x: R * Math.cos((i * 2 * Math.PI) / n),
+    y: R * Math.sin((i * 2 * Math.PI) / n),
+  }));
+
+  it('keeps a coarse circle smooth', () => {
+    const path = smoothPath(circle, 50, 1, tol);
+    expect(path.segments.every((s) => s.kind === 'C')).toBe(true);
+  });
+
+  it('keeps a gentle bend between long straight sides sharp', () => {
+    // Wall and roof of a house: the 35° bend at (0, 0) must not become a bulge.
+    const house = [
+      { x: 0, y: 60 }, { x: 0, y: 0 }, { x: 28.7, y: -41 }, { x: 60, y: 0 }, { x: 60, y: 60 },
+    ];
+    const path = smoothPath(house, 50, 1, 1.5);
+    const wall = path.segments[0];
+    expect(wall.kind).toBe('L');
   });
 });

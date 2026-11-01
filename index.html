@@ -59,8 +59,9 @@
           </label>
           <button id="threshold-auto" type="button" class="link">Automatica</button>
           <label>
-            <span>Precisione <output id="tolerance-out"></output></span>
-            <input id="tolerance" type="range" min="0.05" max="1" step="0.05" />
+            <span>Raddrizza linee <output id="tolerance-out"></output></span>
+            <input id="tolerance" type="range" min="0.1" max="3" step="0.1" />
+            <small class="hint">A sinistra segue fedelmente il tratto, a destra toglie le irregolarità e raddrizza.</small>
           </label>
           <label>
             <span>Ignora forme sotto <output id="minarea-out"></output></span>
