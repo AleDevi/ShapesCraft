@@ -133,3 +133,4 @@ button.link {
 .controls output { color: var(--muted); }
 .controls input[type='range'] { width: 100%; }
 .controls .check { display: flex; align-items: center; gap: 8px; }
+.controls .check-hint { margin: -8px 0 0 28px; }

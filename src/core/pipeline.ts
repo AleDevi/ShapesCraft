@@ -10,7 +10,8 @@ import {
   sampleBilinear,
   type Gray,
 } from './image';
-import { isoContours, signedArea, simplifyClosed, smoothContour, smoothPath, type PathShape } from './trace';
+import { centerlines, cleanBinary } from './centerline';
+import { isoContours, signedArea, simplifyClosed, simplifyOpen, smoothContour, smoothPath, type PathShape } from './trace';
 
 export interface Detection {
   /** Maps sheet millimetres to photo pixels. */
@@ -188,6 +189,8 @@ export interface TraceOptions {
   blurMm: number;
   /** Bumps shorter than this are smoothed out of the outline, in mm (0 = follow every detail). */
   smoothMm: number;
+  /** Trace pen strokes as single lines along their centre instead of as outlines. */
+  centerline: boolean;
 }
 
 export const DEFAULT_TRACE: Omit<TraceOptions, 'threshold'> = {
@@ -197,6 +200,7 @@ export const DEFAULT_TRACE: Omit<TraceOptions, 'threshold'> = {
   cornerDeg: 50,
   blurMm: 0.3,
   smoothMm: 0,
+  centerline: false,
 };
 
 /** Traced outlines in sheet millimetres. */
@@ -218,6 +222,7 @@ export function trace(p: Prepared, r: Rectified, opts: TraceOptions): Traced {
 
   const toMm = (q: Point): Point => ({ x: r.origin.x + q.x / r.pxPerMm, y: r.origin.y + q.y / r.pxPerMm });
   const minAreaPx = opts.minAreaMm2 * r.pxPerMm * r.pxPerMm;
+  if (opts.centerline) return traceCenterlines(field, level, r, opts, toMm, minAreaPx);
   const polygons: Point[][] = [];
   for (const loop of isoContours(field, level)) {
     if (Math.abs(signedArea(loop)) < minAreaPx) continue;
@@ -227,4 +232,54 @@ export function trace(p: Prepared, r: Rectified, opts: TraceOptions): Traced {
     polygons.push(simple.map(toMm));
   }
   return { polygons, shapes: polygons.map((poly) => smoothPath(poly, opts.cornerDeg, 1, opts.toleranceMm)) };
+}
+
+/** Pixel staircases of the skeleton are always smoothed at least this much, in mm. */
+const MIN_CENTERLINE_SMOOTH_MM = 0.6;
+
+function traceCenterlines(
+  field: Gray,
+  level: number,
+  r: Rectified,
+  opts: TraceOptions,
+  toMm: (q: Point) => Point,
+  minAreaPx: number,
+): Traced {
+  const { width: w, height: h } = field;
+  const ink = new Uint8Array(w * h);
+  for (let i = 0; i < ink.length; i++) ink[i] = field.data[i] < level ? 1 : 0;
+  const { lines, strokeWidth } = centerlines(cleanBinary(ink, w, h, minAreaPx), w, h);
+
+  const polygons: Point[][] = [];
+  const shapes: PathShape[] = [];
+  const scale = Math.max(opts.smoothMm, MIN_CENTERLINE_SMOOTH_MM) * r.pxPerMm;
+  for (const line of lines) {
+    let pts = smoothContour(line.points, scale, opts.cornerDeg, line.closed);
+    if (!line.closed) {
+      // Thinning stops half a stroke short of each free end; put that length back.
+      if (line.freeStart) pts = [extend(pts[0], pts, strokeWidth / 2), ...pts.slice(1)];
+      if (line.freeEnd) pts = [...pts.slice(0, -1), extend(pts[pts.length - 1], pts.slice().reverse(), strokeWidth / 2)];
+    }
+    const tol = opts.toleranceMm * r.pxPerMm;
+    const simple = line.closed ? simplifyClosed(pts, tol) : simplifyOpen(pts, tol);
+    if (simple.length < (line.closed ? 3 : 2)) continue;
+    const mm = simple.map(toMm);
+    polygons.push(mm);
+    shapes.push(smoothPath(mm, opts.cornerDeg, 1, opts.toleranceMm, line.closed));
+  }
+  return { polygons, shapes };
+}
+
+/** Moves the end point `end` of a line (whose points run away from it) outward by `by`. */
+function extend(end: Point, pts: Point[], by: number): Point {
+  // Direction from a point about one stroke width inside the line towards the end.
+  let ref = pts[pts.length - 1];
+  for (const p of pts) {
+    if (Math.hypot(p.x - end.x, p.y - end.y) >= Math.max(2 * by, 2)) {
+      ref = p;
+      break;
+    }
+  }
+  const len = Math.hypot(end.x - ref.x, end.y - ref.y) || 1;
+  return { x: end.x + ((end.x - ref.x) / len) * by, y: end.y + ((end.y - ref.y) / len) * by };
 }

@@ -8,7 +8,7 @@ export function pathData(shape: PathShape, offset: Point = { x: 0, y: 0 }): stri
   const o = (p: Point) => pt({ x: p.x - offset.x, y: p.y - offset.y });
   const parts = [`M${o(shape.start)}`];
   for (const s of shape.segments) parts.push(s.kind === 'L' ? `L${o(s.to)}` : `C${o(s.c1)} ${o(s.c2)} ${o(s.to)}`);
-  parts.push('Z');
+  if (shape.closed) parts.push('Z');
   return parts.join(' ');
 }
 
