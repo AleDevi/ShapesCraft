@@ -16,6 +16,7 @@ Web app (PWA) che trasforma la foto di un disegno o di un oggetto appoggiato su 
 - **Prospettiva**: omografia ai minimi quadrati sui 16 angoli dei marker; la finestra della cornice viene ricampionata a 5 px/mm.
 - **Luce**: lo sfondo della carta viene stimato con una superficie quadratica e rimosso, poi soglia automatica (Otsu).
 - **Vettorializzazione**: marching squares con interpolazione sub-pixel, semplificazione Douglas–Peucker, angoli vivi preservati e curve di Bézier sul resto.
+- **Linea singola**: assottigliamento Zhang–Suen dell'inchiostro, scheletro diviso in rami tra estremi e incroci, rimozione dei rami spuri, estremi riallungati di mezzo tratto; i tracciati aperti escono come linee non chiuse nell'SVG.
 
 Tutto gira nel browser, nessun server.
 
@@ -34,7 +35,7 @@ Per provarla dal telefono basta `npm run dev` e aprire l'indirizzo di rete sulla
 
 - Lo spessore del supporto rigido solleva i marker sopra il disegno: con 2 mm di cartone e il telefono a 40 cm l'errore di scala è circa 0,5%. Meglio supporti sottili.
 - Gli oggetti 3D proiettano ombre e il loro bordo superiore risulta più grande per la prospettiva: meglio luce dall'alto e oggetti bassi.
-- I tratti di penna diventano contorni chiusi (doppia linea), non linee singole.
+- In modalità "linea singola" gli incroci tra tratti spessi possono spostarsi leggermente verso il centro della macchia d'inchiostro.
 
 ## Licenza
 

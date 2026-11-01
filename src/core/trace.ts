@@ -90,53 +90,63 @@ export function signedArea(poly: Point[]): number {
 /**
  * Removes bumps and noise shorter than about `scale` from a raw contour while
  * keeping its overall shape: curves stay round and sharp corners stay sharp.
- * Corners (turns above `cornerDeg` at that scale) are pinned; the stretches
- * between them are resampled at `scale / 8` and low-pass filtered with Taubin
- * smoothing, which unlike plain averaging does not shrink the shape.
+ * Corners (turns above `cornerDeg` at that scale) are pinned, as are the ends
+ * of an open line; the stretches between them are resampled at `scale / 8`
+ * and low-pass filtered with Taubin smoothing, which unlike plain averaging
+ * does not shrink the shape.
  */
-export function smoothContour(loop: Point[], scale: number, cornerDeg: number): Point[] {
-  const n = loop.length;
-  if (scale <= 0 || n < 8) return loop;
+export function smoothContour(line: Point[], scale: number, cornerDeg: number, closed = true): Point[] {
+  const n = line.length;
+  if (scale <= 0 || n < (closed ? 8 : 3)) return line;
   const reach = scale / 2;
-  const angle = loop.map((_, i) => turnAngle(loop, i, reach));
+  const angle = line.map((_, i) => turnAngle(line, i, reach, closed));
   // Keep only the sharpest point of each corner region.
-  const corners: number[] = [];
-  for (let i = 0; i < n; i++) {
+  const pins: number[] = closed ? [] : [0];
+  for (let i = closed ? 0 : 1; i < (closed ? n : n - 1); i++) {
     if (angle[i] <= cornerDeg) continue;
     let isMax = true;
     for (const dir of [-1, 1]) {
       for (let k = 1; k < n && isMax; k++) {
-        const j = (((i + dir * k) % n) + n) % n;
-        if (dist(loop[i], loop[j]) > reach) break;
-        if (angle[j] > angle[i] || (angle[j] === angle[i] && j < i)) isMax = false;
+        const j = i + dir * k;
+        if (!closed && (j < 0 || j >= n)) break;
+        const jj = ((j % n) + n) % n;
+        if (dist(line[i], line[jj]) > reach) break;
+        if (angle[jj] > angle[i] || (angle[jj] === angle[i] && jj < i)) isMax = false;
       }
     }
-    if (isMax) corners.push(i);
+    if (isMax) pins.push(i);
   }
+  if (!closed) pins.push(n - 1);
 
   const step = Math.max(1, scale / 8);
   const pts: Point[] = [];
   const pinned: boolean[] = [];
-  const stretches = corners.length
-    ? corners.map((c, k) => [c, corners[(k + 1) % corners.length]])
-    : [[0, 0]];
+  const stretches = closed
+    ? pins.length
+      ? pins.map((c, k) => [c, pins[(k + 1) % pins.length]])
+      : [[0, 0]]
+    : pins.slice(0, -1).map((c, k) => [c, pins[k + 1]]);
   for (const [a, b] of stretches) {
-    // Collect the raw points from corner a up to (not including) corner b.
+    // Collect the raw points from pin a up to pin b.
     const raw: Point[] = [];
     let j = a;
     do {
-      raw.push(loop[j]);
+      raw.push(line[j]);
       j = (j + 1) % n;
     } while (j !== b);
-    raw.push(loop[b]);
+    raw.push(line[b]);
     const res = resample(raw, step);
     res.pop(); // the end point starts the next stretch
     res.forEach((p, k) => {
       pts.push(p);
-      pinned.push(corners.length > 0 && k === 0);
+      pinned.push(pins.length > 0 && k === 0);
     });
   }
-  if (pts.length < 8) return loop;
+  if (!closed) {
+    pts.push(line[n - 1]);
+    pinned.push(true);
+  }
+  if (pts.length < (closed ? 8 : 3)) return line;
 
   const m = pts.length;
   let cur = pts;
@@ -194,12 +204,14 @@ export function simplifyClosed(poly: Point[], tolerance: number): Point[] {
       far = i;
     }
   }
-  const a = rdp(poly.slice(0, far + 1), tolerance);
-  const b = rdp([...poly.slice(far), poly[0]], tolerance);
+  const a = simplifyOpen(poly.slice(0, far + 1), tolerance);
+  const b = simplifyOpen([...poly.slice(far), poly[0]], tolerance);
   return [...a.slice(0, -1), ...b.slice(0, -1)];
 }
 
-function rdp(pts: Point[], tol: number): Point[] {
+/** Ramer–Douglas–Peucker on an open polyline; both ends are kept. */
+export function simplifyOpen(pts: Point[], tol: number): Point[] {
+  if (pts.length < 3) return pts;
   const keep = new Uint8Array(pts.length);
   keep[0] = keep[pts.length - 1] = 1;
   const stack: [number, number][] = [[0, pts.length - 1]];
@@ -231,7 +243,7 @@ export type Segment =
   | { kind: 'L'; to: Point }
   | { kind: 'C'; c1: Point; c2: Point; to: Point };
 
-export interface PathShape { start: Point; segments: Segment[] }
+export interface PathShape { start: Point; segments: Segment[]; closed: boolean }
 
 /**
  * Turns a simplified polygon into a smooth closed path. Vertices where the
@@ -243,11 +255,12 @@ export interface PathShape { start: Point; segments: Segment[] }
  * long straight sides) is made a corner too, since the polygon already stays
  * within `tolerance` of the traced edge.
  */
-export function smoothPath(input: Point[], cornerDeg: number, reach: number, tolerance: number): PathShape {
-  const poly = mergeCorners(input, cornerDeg, reach);
+export function smoothPath(input: Point[], cornerDeg: number, reach: number, tolerance: number, closed = true): PathShape {
+  const poly = closed ? mergeCorners(input, cornerDeg, reach) : input;
   const n = poly.length;
   const at = (i: number) => poly[((i % n) + n) % n];
-  const corner = poly.map((_, i) => turnAngle(poly, i, reach) > cornerDeg);
+  // The ends of an open line act as corners: their tangent follows the end segment.
+  const corner = poly.map((_, i) => (!closed && (i === 0 || i === n - 1)) || turnAngle(poly, i, reach, closed) > cornerDeg);
 
   const unit = (a: Point, b: Point) => {
     const l = Math.hypot(b.x - a.x, b.y - a.y) || 1;
@@ -268,7 +281,7 @@ export function smoothPath(input: Point[], cornerDeg: number, reach: number, tol
   }
 
   const segments: Segment[] = [];
-  for (let i = 0; i < n; i++) {
+  for (let i = 0; i < (closed ? n : n - 1); i++) {
     const p1 = at(i);
     const p2 = at(i + 1);
     const c1 = corner[i % n];
@@ -287,17 +300,19 @@ export function smoothPath(input: Point[], cornerDeg: number, reach: number, tol
       to: p2,
     });
   }
-  return { start: poly[0], segments };
+  return { start: poly[0], segments, closed };
 }
 
 /** Turning angle at vertex i, using points at least `reach` away on either side. */
-function turnAngle(poly: Point[], i: number, reach: number): number {
+function turnAngle(poly: Point[], i: number, reach: number, closed = true): number {
   const n = poly.length;
   const p = poly[i];
   const walk = (dir: number) => {
     let j = i;
     for (let k = 1; k < n; k++) {
-      j = (((i + dir * k) % n) + n) % n;
+      const next = i + dir * k;
+      if (!closed && (next < 0 || next >= n)) break; // an open line stops at its ends
+      j = ((next % n) + n) % n;
       if (Math.hypot(poly[j].x - p.x, poly[j].y - p.y) >= reach) break;
     }
     return poly[j];

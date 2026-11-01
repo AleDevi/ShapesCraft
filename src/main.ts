@@ -34,6 +34,7 @@ const controls = {
   minarea: $<HTMLInputElement>('minarea'),
   smooth: $<HTMLInputElement>('smooth'),
   invert: $<HTMLInputElement>('invert'),
+  centerline: $<HTMLInputElement>('centerline'),
   showPhoto: $<HTMLInputElement>('show-photo'),
 };
 
@@ -55,6 +56,7 @@ controls.tolerance.value = String(DEFAULT_TRACE.toleranceMm);
 controls.minarea.value = String(DEFAULT_TRACE.minAreaMm2);
 controls.smooth.value = String(DEFAULT_TRACE.smoothMm);
 controls.invert.checked = DEFAULT_TRACE.invert;
+controls.centerline.checked = DEFAULT_TRACE.centerline;
 
 $('print-frame').addEventListener('click', () => {
   const frame = frameById(frameSelect.value);
@@ -74,7 +76,7 @@ for (const id of ['camera', 'upload']) {
 }
 
 let pending = 0;
-for (const el of [controls.threshold, controls.tolerance, controls.minarea, controls.smooth, controls.invert]) {
+for (const el of [controls.threshold, controls.tolerance, controls.minarea, controls.smooth, controls.invert, controls.centerline]) {
   el.addEventListener('input', () => {
     updateOutputs();
     // Coalesce slider drags into one re-trace per frame.
@@ -151,6 +153,7 @@ function options(): TraceOptions {
     minAreaMm2: Number(controls.minarea.value),
     smoothMm: Number(controls.smooth.value),
     invert: controls.invert.checked,
+    centerline: controls.centerline.checked,
   };
 }
 
@@ -173,7 +176,8 @@ function render() {
     `<svg viewBox="${area.x} ${area.y} ${area.w} ${area.h}" xmlns="http://www.w3.org/2000/svg">` +
     `<rect x="${area.x}" y="${area.y}" width="${area.w}" height="${area.h}" fill="#fff"/>${image}` +
     `<g fill="rgba(31,111,235,0.12)" fill-rule="evenodd" stroke="#1f6feb" stroke-width="0.6" vector-effect="non-scaling-stroke">` +
-    `<path d="${shapes.map((s) => pathData(s)).join(' ')}" stroke="none"/>${paths}</g></svg>`;
+    // Tint the inside of closed outlines; single lines have no inside.
+    `<path d="${shapes.filter((s) => s.closed).map((s) => pathData(s)).join(' ')}" stroke="none"/>${paths}</g></svg>`;
 
   if (!polygons.length) {
     summary.textContent = 'Nessuna forma trovata: prova ad alzare la soglia.';
@@ -181,7 +185,7 @@ function render() {
   }
   const box = boundingBox(polygons);
   summary.textContent =
-    `${polygons.length} ${polygons.length === 1 ? 'forma' : 'forme'} · ` +
+    `${polygons.length} ${controls.centerline.checked ? (polygons.length === 1 ? 'linea' : 'linee') : polygons.length === 1 ? 'forma' : 'forme'} · ` +
     `${(box.maxX - box.minX).toFixed(1)} × ${(box.maxY - box.minY).toFixed(1)} mm`;
 }
 

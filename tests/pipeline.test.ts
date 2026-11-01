@@ -169,3 +169,46 @@ describe('smoothContour', () => {
     expect(Math.max(...offSide)).toBeLessThan(1);
   });
 });
+
+describe('single-line (centreline) tracing', () => {
+  // A ring of radius 30 mm and a straight 80 mm stroke, both drawn with a ~2.5 mm pen.
+  const ring = { x: 105, y: 110, r: 30 };
+  const drawing = (x: number, y: number) =>
+    Math.abs(Math.hypot(x - ring.x, y - ring.y) - ring.r) <= 1.25 ||
+    (x >= 60 && x <= 140 && Math.abs(y - 200) <= 1.25);
+  const { photo } = renderPhoto(
+    'a4',
+    drawing,
+    { width: 2000, height: 2600 },
+    [
+      { x: 200, y: 180 },
+      { x: 1800, y: 240 },
+      { x: 1900, y: 2450 },
+      { x: 120, y: 2380 },
+    ],
+  );
+  const frame = frameById('a4');
+
+  it('traces each stroke as one line along its centre', { timeout: 60000 }, () => {
+    const det = detectFrame(photo, frame);
+    const rect = rectify(photo, frame, det, 5);
+    const prep = prepare(rect);
+    const out = trace(prep, rect, { ...DEFAULT_TRACE, threshold: prep.autoThreshold, centerline: true });
+    expect(out.shapes.length).toBe(2);
+
+    const loopIdx = out.shapes.findIndex((s) => s.closed);
+    expect(loopIdx).toBeGreaterThanOrEqual(0);
+    const radii = out.polygons[loopIdx].map((p) => Math.hypot(p.x - ring.x, p.y - ring.y));
+    const mean = radii.reduce((a, b) => a + b, 0) / radii.length;
+    expect(Math.abs(mean - ring.r)).toBeLessThan(0.3);
+
+    const line = out.polygons[1 - loopIdx];
+    expect(out.shapes[1 - loopIdx].closed).toBe(false);
+    const xs = line.map((p) => p.x).sort((a, b) => a - b);
+    expect(xs[0]).toBeCloseTo(60, 0);
+    expect(xs[xs.length - 1]).toBeCloseTo(140, 0);
+    expect(Math.max(...line.map((p) => Math.abs(p.y - 200)))).toBeLessThan(0.3);
+
+    expect(exportSvg(out.shapes, out.polygons)).not.toMatch(/Z"\/>[\s\S]*Z"\/>/);
+  });
+});
