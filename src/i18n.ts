@@ -1,19 +1,28 @@
 export type Lang = 'en' | 'it';
 
 const en = {
-  tagline: 'From photo to true-scale vector',
   language: 'Language',
   'how.download': 'Download',
   'how.print': 'Print',
   'how.photo': 'Take a picture',
   'how.file': 'Get your file',
+  'how.download.text': 'Get the frame as a PDF, A4 or A3.',
+  'how.print.text': 'Print it at 100%. Glue it to card if you like.',
+  'how.photo.text': 'Put the drawing or the object inside the frame and take a photo.',
+  'how.file.text': 'Download the SVG, in real millimetres.',
+  'welcome.lead': 'Turn a drawing or an object into a true-scale vector file, ready for laser cutters, CNC and plotters.',
+  'welcome.start': 'Start',
+  'nav.help': 'How it works',
   'frame.title': 'Frame',
   'frame.format': 'Format',
   'frame.hint':
-    'Print the frame at 100% (no "fit to page") and check that the reference line measures 100 mm. ' +
-    'For a rigid frame, glue it to card or thin plastic and cut out the outer edge and the window. ' +
-    'Then lay it over the drawing or object (on a white background), which must sit inside the window.',
-  'frame.open': 'Open printable frame',
+    'Send the PDF to yourself, to a computer or to a print shop, and print it at 100% (no "fit to page"): ' +
+    'the line at the bottom must measure 100 mm. For a rigid frame, glue it to card or thin plastic and cut along the black lines.',
+  'frame.share': 'Share PDF',
+  'frame.download': 'Download PDF',
+  'frame.link': 'Copy link',
+  'frame.linkCopied': 'Link copied: open it on a computer to print the frame.',
+  'frame.linkShow': 'Open this link on a computer to print the frame: {url}',
   'photo.title': 'Photo',
   'photo.hint': 'Frame the whole sheet with all four markers visible. Even light, no glare.',
   'photo.take': 'Take photo',
@@ -55,19 +64,28 @@ const en = {
 type Key = keyof typeof en;
 
 const it: Record<Key, string> = {
-  tagline: 'Dalla foto al vettoriale in scala reale',
   language: 'Lingua',
   'how.download': 'Scarica',
   'how.print': 'Stampa',
   'how.photo': 'Scatta una foto',
   'how.file': 'Ottieni il file',
+  'how.download.text': 'Scarica la cornice in PDF, A4 o A3.',
+  'how.print.text': 'Stampala al 100%. Se vuoi, incollala su cartoncino.',
+  'how.photo.text': "Metti il disegno o l'oggetto dentro la cornice e scatta una foto.",
+  'how.file.text': "Scarica l'SVG, in millimetri reali.",
+  'welcome.lead': 'Trasforma un disegno o un oggetto in un file vettoriale in scala reale, pronto per laser, CNC e plotter.',
+  'welcome.start': 'Inizia',
+  'nav.help': 'Come funziona',
   'frame.title': 'Cornice',
   'frame.format': 'Formato',
   'frame.hint':
-    'Stampa la cornice al 100% (senza "adatta alla pagina") e controlla che la linea di riferimento misuri 100 mm. ' +
-    'Per una cornice rigida incollala su cartoncino o plastica sottile e ritaglia bordo esterno e finestra. ' +
-    "Poi appoggiala sul disegno o sull'oggetto (su fondo bianco), che deve stare dentro la finestra.",
-  'frame.open': 'Apri cornice da stampare',
+    'Manda il PDF a te stesso, a un computer o a una copisteria e stampalo al 100% (senza "adatta alla pagina"): ' +
+    'la linea in basso deve misurare 100 mm. Per una cornice rigida incollala su cartoncino o plastica sottile e ritaglia lungo le linee nere.',
+  'frame.share': 'Condividi PDF',
+  'frame.download': 'Scarica PDF',
+  'frame.link': 'Copia link',
+  'frame.linkCopied': 'Link copiato: aprilo da un computer per stampare la cornice.',
+  'frame.linkShow': 'Apri questo link da un computer per stampare la cornice: {url}',
   'photo.title': 'Foto',
   'photo.hint': 'Inquadra tutto il foglio con i quattro marker visibili. Luce uniforme, niente riflessi.',
   'photo.take': 'Scatta foto',

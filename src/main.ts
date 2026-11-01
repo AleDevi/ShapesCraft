@@ -1,5 +1,6 @@
 import './style.css';
-import { FRAMES, frameById, frameSvg } from './core/frame';
+import { FRAMES, frameById } from './core/frame';
+import { framePdf, framePdfName } from './core/pdf';
 import { defaultLang, translator, type Lang, type Translate } from './i18n';
 import { grayToRgba, toGray } from './core/image';
 import {
@@ -75,13 +76,65 @@ controls.smooth.value = String(DEFAULT_TRACE.smoothMm);
 controls.invert.checked = DEFAULT_TRACE.invert;
 controls.centerline.checked = DEFAULT_TRACE.centerline;
 
-$('print-frame').addEventListener('click', () => {
+// Welcome page and tool are two views; the hash lets the phone's back button return to the welcome page.
+const welcome = $('welcome');
+const app = $('app');
+const help = $('help');
+function showView() {
+  const inApp = location.hash === '#app';
+  welcome.hidden = inApp;
+  app.hidden = !inApp;
+  help.hidden = !inApp;
+  window.scrollTo(0, 0);
+}
+window.addEventListener('hashchange', showView);
+$('start').addEventListener('click', () => (location.hash = 'app'));
+help.addEventListener('click', () => (location.hash = ''));
+showView();
+
+/** Where the published site serves ready-made frame PDFs, so a computer can open them by link. */
+const SITE_URL = 'https://aledevi.github.io/ShapesCraft/';
+const frameStatus = $<HTMLParagraphElement>('frame-status');
+const shareButton = $<HTMLButtonElement>('share-frame');
+
+function frameFile(): File {
   const frame = frameById(frameSelect.value);
-  const blob = new Blob([frameSvg(frame, lang)], { type: 'image/svg+xml' });
-  const url = URL.createObjectURL(blob);
-  // Opening the SVG on its own lets the browser print it at its real size in mm.
-  if (!window.open(url, '_blank')) void download(blob, `${lang === 'it' ? 'cornice' : 'frame'}-shapescraft-${frame.id}.svg`);
+  return new File([framePdf(frame, lang) as BlobPart], framePdfName(frame, lang), { type: 'application/pdf' });
+}
+
+// Sharing files (email, chat apps, Drive, a printer app) is the easiest way to print from a phone.
+shareButton.hidden = !navigator.canShare?.({ files: [frameFile()] });
+// Without sharing, downloading becomes the main action.
+$('download-frame').classList.toggle('secondary', !shareButton.hidden);
+shareButton.addEventListener('click', async () => {
+  const file = frameFile();
+  try {
+    await navigator.share({ files: [file], title: 'ShapesCraft' });
+  } catch (err) {
+    if ((err as Error).name !== 'AbortError') await download(file, file.name);
+  }
 });
+$('download-frame').addEventListener('click', () => {
+  const file = frameFile();
+  void download(file, file.name);
+});
+$('link-frame').addEventListener('click', async () => {
+  const url = `${SITE_URL}frames/${framePdfName(frameById(frameSelect.value), lang)}`;
+  const link = document.createElement('a');
+  link.href = url;
+  link.textContent = url;
+  link.target = '_blank';
+  link.rel = 'noopener';
+  // The link is always shown, since clipboard access can be refused (embedded pages, old browsers).
+  frameStatus.replaceChildren(t('frame.linkShow', { url: '' }), link);
+  try {
+    await navigator.clipboard.writeText(url);
+    frameStatus.replaceChildren(`${t('frame.linkCopied')} `, link);
+  } catch {
+    // Keep the visible link.
+  }
+});
+frameSelect.addEventListener('change', () => (frameStatus.textContent = ''));
 
 for (const id of ['camera', 'upload']) {
   $<HTMLInputElement>(id).addEventListener('change', async (e) => {
@@ -238,6 +291,7 @@ function applyLang() {
   }
   langSelect.setAttribute('aria-label', t('language'));
   if (statusMessage) setStatus(statusMessage, statusIsError);
+  $('frame-status').textContent = '';
   updateOutputs();
   render();
 }

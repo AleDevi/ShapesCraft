@@ -36,6 +36,7 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 
 body {
   margin: 0;
@@ -53,19 +54,32 @@ header, main {
 
 header { padding-top: 20px; }
 h1 { margin: 0; font-size: 1.6rem; }
-.title-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.title-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; }
 .title-row select { min-height: 36px; }
-.tagline { margin: 2px 0 12px; color: var(--muted); }
+.title-tools { display: flex; align-items: center; gap: 14px; }
+.title-tools button.link { font-size: 0.95rem; }
+#frame-status { overflow-wrap: anywhere; }
+header { margin-bottom: 12px; }
 
-.how {
-  list-style: none; margin: 0 0 14px; padding: 12px 8px;
-  display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px;
-  background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+.welcome .lead { font-size: 1.15rem; line-height: 1.4; margin: 4px 0 18px; }
+.how { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.how li {
+  display: flex; align-items: center; gap: 14px;
+  background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px;
 }
-.how li { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; font-size: 0.85rem; font-weight: 600; line-height: 1.2; }
-.how svg { width: 44px; height: 44px; fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
-.how-n { position: absolute; top: -4px; left: calc(50% - 30px); width: 18px; height: 18px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 0.7rem; display: grid; place-items: center; }
-.how li:not(:last-child)::after { content: '›'; position: absolute; right: -6px; top: 12px; color: var(--muted); font-size: 1.2rem; }
+.how svg {
+  flex: none; width: 48px; height: 48px;
+  fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round;
+}
+.how strong { display: flex; align-items: center; gap: 6px; font-size: 1.05rem; }
+.how-text { display: block; color: var(--muted); font-size: 0.95rem; }
+.how-n {
+  display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%;
+  background: var(--accent); color: #fff; font-size: 0.8rem;
+}
+/* Two columns of steps on tablets and wider screens. */
+@media (min-width: 600px) { .how { grid-template-columns: 1fr 1fr; } }
+button.big { min-height: 54px; font-size: 1.1rem; margin-top: 8px; }
 
 .card {
   background: var(--card);
