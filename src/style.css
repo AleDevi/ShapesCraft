@@ -142,16 +142,41 @@ button.link {
 .status { min-height: 1.4em; margin: 12px 0 0; }
 .status.error { color: var(--error); }
 
+/*
+ * The preview stays pinned at the top of the screen while the controls scroll
+ * underneath, so the effect of every slider is visible on a phone.
+ */
+.preview-pane {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--card);
+  margin: 0 -16px;
+  padding: 8px 16px 0;
+  border-bottom: 1px solid var(--border);
+}
 .preview-wrap {
   border: 1px solid var(--border);
   border-radius: 8px;
-  overflow: auto;
-  max-height: 70vh;
+  overflow: hidden;
   background: #fff;
 }
-.preview svg { display: block; width: 100%; height: auto; }
+/* The whole traced area always fits: the SVG scales into a fixed-height box. */
+.preview svg { display: block; width: 100%; height: 42vh; height: 42svh; }
 
-.summary { font-weight: 600; margin: 10px 0; }
+.summary { font-weight: 600; margin: 8px 0; }
+.controls-pane { padding-top: 12px; }
+
+/* Computers and landscape tablets: steps 1 and 2 side by side, then preview beside the controls. */
+@media (min-width: 960px) {
+  header, main#app { max-width: 1100px; }
+  main#app { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; align-items: start; }
+  #result { grid-column: 1 / -1; display: grid; grid-template-columns: 3fr 2fr; gap: 0 20px; align-items: start; }
+  #result h2 { grid-column: 1 / -1; }
+  .preview-pane { margin: 0; padding: 0; border: none; top: 12px; }
+  .preview svg { height: calc(100vh - 160px); max-height: 900px; }
+  .controls-pane { padding-top: 0; }
+}
 
 .controls { display: grid; gap: 12px; }
 .controls label { display: grid; gap: 4px; font-size: 0.95rem; }

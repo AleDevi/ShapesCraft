@@ -82,9 +82,13 @@
 
       <section id="result" class="card" hidden>
         <h2><span class="step">3</span> <span data-i18n="result.title"></span></h2>
-        <div class="preview-wrap"><div id="preview" class="preview"></div></div>
-        <p id="summary" class="summary"></p>
+        <!-- Pinned while the controls scroll, so every slider's effect stays in view. -->
+        <div class="preview-pane">
+          <div class="preview-wrap"><div id="preview" class="preview"></div></div>
+          <p id="summary" class="summary"></p>
+        </div>
 
+        <div class="controls-pane">
         <div class="controls">
           <div class="segmented" role="radiogroup" aria-labelledby="fill-label">
             <span id="fill-label" data-i18n="fill.title"></span>
@@ -121,6 +125,7 @@
 
         <div class="buttons">
           <button id="download" type="button" data-i18n="download"></button>
+        </div>
         </div>
       </section>
     </main>
