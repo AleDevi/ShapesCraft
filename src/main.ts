@@ -39,6 +39,7 @@ const controls = {
   invert: $<HTMLInputElement>('invert'),
   centerline: $<HTMLInputElement>('centerline'),
   showPhoto: $<HTMLInputElement>('show-photo'),
+  fill: [...document.querySelectorAll<HTMLInputElement>('input[name="fill"]')],
 };
 
 interface Session {
@@ -75,6 +76,16 @@ controls.minarea.value = String(DEFAULT_TRACE.minAreaMm2);
 controls.smooth.value = String(DEFAULT_TRACE.smoothMm);
 controls.invert.checked = DEFAULT_TRACE.invert;
 controls.centerline.checked = DEFAULT_TRACE.centerline;
+const savedFill = localStorageGet('fill');
+for (const radio of controls.fill) {
+  radio.checked = radio.value === (savedFill === 'filled' ? 'filled' : 'outline');
+  radio.addEventListener('change', () => {
+    localStorageSet('fill', radio.value);
+    render();
+  });
+}
+/** Filled output applies to closed shapes only, so single-line mode turns it off. */
+const isFilled = () => !controls.centerline.checked && controls.fill.some((r) => r.checked && r.value === 'filled');
 
 // Welcome page and tool are two views; the hash lets the phone's back button return to the welcome page.
 const welcome = $('welcome');
@@ -164,7 +175,7 @@ $('threshold-auto').addEventListener('click', () => {
 
 $('download').addEventListener('click', () => {
   if (!session?.traced) return;
-  const svg = exportSvg(session.traced.shapes, session.traced.polygons);
+  const svg = exportSvg(session.traced.shapes, session.traced.polygons, 2, isFilled());
   const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
   void download(new Blob([svg], { type: 'image/svg+xml' }), `shapescraft-${stamp}.svg`);
 });
@@ -235,14 +246,14 @@ function render() {
   const r = session.rectified;
   const area = { x: r.origin.x, y: r.origin.y, w: r.gray.width / r.pxPerMm, h: r.gray.height / r.pxPerMm };
   const { shapes, polygons } = session.traced;
-  const paths = shapes.map((s) => `<path d="${pathData(s)}"/>`).join('');
+  const paths = shapes.map((s) => `<path d="${pathData(s)}" fill="none"/>`).join('');
   const image = controls.showPhoto.checked
     ? `<image href="${session.photoUrl}" x="${area.x}" y="${area.y}" width="${area.w}" height="${area.h}" opacity="0.55"/>`
     : '';
   preview.innerHTML =
     `<svg viewBox="${area.x} ${area.y} ${area.w} ${area.h}" xmlns="http://www.w3.org/2000/svg">` +
     `<rect x="${area.x}" y="${area.y}" width="${area.w}" height="${area.h}" fill="#fff"/>${image}` +
-    `<g fill="rgba(31,111,235,0.12)" fill-rule="evenodd" stroke="#1f6feb" stroke-width="0.6" vector-effect="non-scaling-stroke">` +
+    `<g fill="${isFilled() ? 'rgba(28,33,40,0.85)' : 'rgba(31,111,235,0.12)'}" fill-rule="evenodd" stroke="#1f6feb" stroke-width="0.6" vector-effect="non-scaling-stroke">` +
     // Tint the inside of closed outlines; single lines have no inside.
     `<path d="${shapes.filter((s) => s.closed).map((s) => pathData(s)).join(' ')}" stroke="none"/>${paths}</g></svg>`;
 
@@ -257,6 +268,8 @@ function render() {
 }
 
 function updateOutputs() {
+  for (const radio of controls.fill) radio.disabled = controls.centerline.checked;
+  $('fill-hint').textContent = t(controls.centerline.checked ? 'fill.lines' : 'fill.hint');
   $<HTMLOutputElement>('threshold-out').value = Number(controls.threshold.value || 0).toFixed(2);
   $<HTMLOutputElement>('tolerance-out').value = `${controls.tolerance.value} mm`;
   $<HTMLOutputElement>('minarea-out').value = `${controls.minarea.value} mm²`;
