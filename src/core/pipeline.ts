@@ -1,5 +1,5 @@
 import { AR } from '../vendor/js-aruco2/aruco.js';
-import { DICTIONARY, MARKER_IDS, keepOutZones, markerCorners, workArea, type FrameLayout, type Rect } from './frame';
+import { DICTIONARY, MARKER_IDS, markerCorners, workArea, type FrameLayout } from './frame';
 import { applyH, findHomography, type Mat3, type Point } from './homography';
 import {
   boxBlur,
@@ -137,18 +137,14 @@ export interface Rectified {
   /** Sheet-mm position of the top-left of pixel (0,0). */
   origin: Point;
   pxPerMm: number;
-  /** 1 where the pixel belongs to the frame (markers, label) rather than the work area. */
-  mask: Uint8Array;
 }
 
-/** Resamples the work area of the sheet into a fronto-parallel image at `pxPerMm`. */
+/** Resamples the frame window into a fronto-parallel image at `pxPerMm`. */
 export function rectify(photo: Gray, frame: FrameLayout, det: Detection, pxPerMm: number): Rectified {
   const area = workArea(frame);
   const width = Math.round(area.w * pxPerMm);
   const height = Math.round(area.h * pxPerMm);
   const data = new Float32Array(width * height);
-  const mask = new Uint8Array(width * height);
-  const zones = keepOutZones(frame);
   const h = det.sheetToPhoto;
   for (let y = 0; y < height; y++) {
     const my = area.y + (y + 0.5) / pxPerMm;
@@ -159,27 +155,21 @@ export function rectify(photo: Gray, frame: FrameLayout, det: Detection, pxPerMm
       const py = (h[3] * mx + h[4] * my + h[5]) / w;
       // Photo pixel (i, j) covers [i, i+1); its sample sits at the centre.
       data[y * width + x] = sampleBilinear(photo, px - 0.5, py - 0.5, 1);
-      if (zones.some((z) => inRect(z, mx, my))) mask[y * width + x] = 1;
     }
   }
-  return { gray: { width, height, data }, origin: { x: area.x, y: area.y }, pxPerMm, mask };
-}
-
-function inRect(r: Rect, x: number, y: number): boolean {
-  return x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
+  return { gray: { width, height, data }, origin: { x: area.x, y: area.y }, pxPerMm };
 }
 
 export interface Prepared {
-  /** Illumination-corrected image, frame regions painted white. */
+  /** Illumination-corrected image. */
   field: Gray;
   autoThreshold: number;
 }
 
 /** Normalises lighting so a single threshold works across the whole sheet. */
 export function prepare(r: Rectified): Prepared {
-  const flat = flattenIllumination(r.gray, Math.round(10 * r.pxPerMm), r.mask);
-  for (let i = 0; i < r.mask.length; i++) if (r.mask[i]) flat.data[i] = 1;
-  const t = otsu(flat, r.mask);
+  const flat = flattenIllumination(r.gray, Math.round(10 * r.pxPerMm));
+  const t = otsu(flat);
   // A nearly blank sheet makes Otsu split paper noise; keep the threshold in a sane band.
   return { field: flat, autoThreshold: Math.min(0.8, Math.max(0.35, t)) };
 }
@@ -217,7 +207,7 @@ export function trace(p: Prepared, r: Rectified, opts: TraceOptions): Traced {
   let level = opts.threshold;
   if (opts.invert) {
     const data = new Float32Array(field.data.length);
-    for (let i = 0; i < data.length; i++) data[i] = r.mask[i] ? 1 : 1 - field.data[i];
+    for (let i = 0; i < data.length; i++) data[i] = 1 - field.data[i];
     field = { ...field, data };
     level = 1 - level;
   }

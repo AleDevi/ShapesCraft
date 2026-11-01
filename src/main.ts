@@ -47,7 +47,8 @@ interface Session {
 let session: Session | null = null;
 
 for (const f of FRAMES) frameSelect.add(new Option(f.name, f.id));
-frameSelect.value = localStorageGet('frame') ?? 'a3';
+const savedFrame = localStorageGet('frame');
+frameSelect.value = FRAMES.some((f) => f.id === savedFrame) ? savedFrame! : 'a4';
 frameSelect.addEventListener('change', () => localStorageSet('frame', frameSelect.value));
 
 controls.tolerance.value = String(DEFAULT_TRACE.toleranceMm);
