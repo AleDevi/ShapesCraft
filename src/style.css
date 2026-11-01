@@ -146,3 +146,14 @@ button.link {
 .controls input[type='range'] { width: 100%; }
 .controls .check { display: flex; align-items: center; gap: 8px; }
 .controls .check-hint { margin: -8px 0 0 28px; }
+
+.site-footer {
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.85rem;
+  padding: 1rem 1rem 2rem;
+}
+
+.site-footer a {
+  color: var(--accent);
+}
