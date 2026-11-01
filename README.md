@@ -36,3 +36,9 @@ Per provarla dal telefono basta `npm run dev` e aprire l'indirizzo di rete sulla
 - Lo spessore del supporto rigido solleva i marker sopra il disegno: con 2 mm di cartone e il telefono a 40 cm l'errore di scala è circa 0,5%. Meglio supporti sottili.
 - Gli oggetti 3D proiettano ombre e il loro bordo superiore risulta più grande per la prospettiva: meglio luce dall'alto e oggetti bassi.
 - In modalità "linea singola" gli incroci tra tratti spessi possono spostarsi leggermente verso il centro della macchia d'inchiostro.
+
+## Licenza
+
+ShapesCraft è distribuito con licenza [GNU AGPL-3.0](LICENSE) (`AGPL-3.0-only`). Copyright © 2026 Alessandro Devigili.
+
+Il codice in `src/vendor/js-aruco2/` resta sotto la sua licenza originale (MIT, con parti derivate da OpenCV sotto licenza BSD): vedi [`src/vendor/js-aruco2/LICENSE.txt`](src/vendor/js-aruco2/LICENSE.txt).
