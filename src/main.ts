@@ -61,7 +61,7 @@ $('print-frame').addEventListener('click', () => {
   const blob = new Blob([frameSvg(frame)], { type: 'image/svg+xml' });
   const url = URL.createObjectURL(blob);
   // Opening the SVG on its own lets the browser print it at its real size in mm.
-  if (!window.open(url, '_blank')) download(blob, `cornice-shapescraft-${frame.id}.svg`);
+  if (!window.open(url, '_blank')) void download(blob, `cornice-shapescraft-${frame.id}.svg`);
 });
 
 for (const id of ['camera', 'upload']) {
@@ -94,7 +94,7 @@ $('download').addEventListener('click', () => {
   if (!session?.traced) return;
   const svg = exportSvg(session.traced.shapes, session.traced.polygons);
   const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
-  download(new Blob([svg], { type: 'image/svg+xml' }), `shapescraft-${stamp}.svg`);
+  void download(new Blob([svg], { type: 'image/svg+xml' }), `shapescraft-${stamp}.svg`);
 });
 
 updateOutputs();
@@ -214,7 +214,28 @@ function nextFrame() {
   return new Promise((res) => requestAnimationFrame(() => setTimeout(res, 0)));
 }
 
-function download(blob: Blob, name: string) {
+interface DownloadsCapability {
+  save(req: { filename: string; data: Blob }): Promise<unknown>;
+}
+type ClaudeHost = { use(name: 'downloads'): Promise<DownloadsCapability | null> };
+
+/**
+ * Saves a file. Inside a claude.ai artifact the sandbox blocks plain downloads,
+ * so the viewer's `downloads` capability is used there instead.
+ */
+async function download(blob: Blob, name: string) {
+  const host = (window as unknown as { claude?: ClaudeHost }).claude;
+  if (host) {
+    const downloads = await host.use('downloads');
+    if (downloads) {
+      try {
+        await downloads.save({ filename: name, data: blob });
+      } catch (err) {
+        if ((err as { code?: string }).code !== 'declined') setStatus('Non riesco a salvare il file in questa pagina.', true);
+      }
+      return;
+    }
+  }
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = name;
