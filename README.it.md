@@ -2,6 +2,10 @@
 
 [English](README.md) · **Italiano**
 
+### 👉 [**Apri l'app: aledevi.github.io/ShapesCraft**](https://aledevi.github.io/ShapesCraft/)
+
+Niente installazione né registrazione: funziona nel browser di telefono, tablet e computer.
+
 Web app (PWA) che trasforma la foto di un disegno o di un oggetto appoggiato su una cornice stampata in un vettoriale SVG in scala reale, pronto per laser, CNC o plotter da taglio.
 
 L'app è in italiano e in inglese: segue la lingua del telefono e si può cambiare dal menu in alto.
