@@ -13,6 +13,14 @@ import {
 import { centerlines, cleanBinary } from './centerline';
 import { isoContours, signedArea, simplifyClosed, simplifyOpen, smoothContour, smoothPath, type PathShape } from './trace';
 
+/** Fewer than three markers were recognised, so the sheet can't be located. */
+export class FrameNotFoundError extends Error {
+  constructor(readonly markersFound: number) {
+    super(`Frame not found: ${markersFound} of 4 markers recognised.`);
+    this.name = 'FrameNotFoundError';
+  }
+}
+
 export interface Detection {
   /** Maps sheet millimetres to photo pixels. */
   sheetToPhoto: Mat3;
@@ -49,10 +57,7 @@ export function detectFrame(photo: Gray, frame: FrameLayout): Detection {
     });
   }
   if (ids.length < 3) {
-    throw new Error(
-      `Cornice non trovata: riconosciuti ${ids.length} marker su 4. ` +
-        'Inquadra tutto il foglio, evita riflessi e ombre sui quadrati neri.',
-    );
+    throw new FrameNotFoundError(ids.length);
   }
   const sheetToPhoto = findHomography(src, dst);
   const errorPx = src.reduce((s, p, i) => {

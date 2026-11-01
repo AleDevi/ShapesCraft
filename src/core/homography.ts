@@ -14,7 +14,7 @@ export function invert3(m: Mat3): Mat3 {
   const B = -(d * i - f * g);
   const C = d * h - e * g;
   const det = a * A + b * B + c * C;
-  if (Math.abs(det) < 1e-12) throw new Error('Matrice singolare');
+  if (Math.abs(det) < 1e-12) throw new Error('Singular matrix');
   return [
     A / det, -(b * i - c * h) / det, (b * f - c * e) / det,
     B / det, (a * i - c * g) / det, -(a * f - c * d) / det,
@@ -46,7 +46,7 @@ function solve(a: number[][], b: number[]): number[] {
     for (let r = col + 1; r < n; r++) if (Math.abs(a[r][col]) > Math.abs(a[pivot][col])) pivot = r;
     [a[col], a[pivot]] = [a[pivot], a[col]];
     [b[col], b[pivot]] = [b[pivot], b[col]];
-    if (Math.abs(a[col][col]) < 1e-14) throw new Error('Sistema singolare');
+    if (Math.abs(a[col][col]) < 1e-14) throw new Error('Singular system');
     for (let r = col + 1; r < n; r++) {
       const k = a[r][col] / a[col][col];
       for (let c = col; c < n; c++) a[r][c] -= k * a[col][c];
@@ -67,7 +67,7 @@ function solve(a: number[][], b: number[]): number[] {
  * with h33 fixed to 1 and Hartley normalisation for numerical stability.
  */
 export function findHomography(src: Point[], dst: Point[]): Mat3 {
-  if (src.length !== dst.length || src.length < 4) throw new Error('Servono almeno 4 punti');
+  if (src.length !== dst.length || src.length < 4) throw new Error('At least 4 point pairs are needed');
   const ns = normaliser(src);
   const nd = normaliser(dst);
   const ata = Array.from({ length: 8 }, () => new Array<number>(8).fill(0));

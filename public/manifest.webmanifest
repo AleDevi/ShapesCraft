@@ -1,7 +1,7 @@
 {
   "name": "ShapesCraft",
   "short_name": "ShapesCraft",
-  "description": "Dalla foto di un disegno al vettoriale SVG in scala reale",
+  "description": "From a photo of a drawing to a true-scale SVG vector",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#f6f7f9",

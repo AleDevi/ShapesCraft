@@ -1,8 +1,10 @@
 import './style.css';
 import { FRAMES, frameById, frameSvg } from './core/frame';
+import { defaultLang, translator, type Lang, type Translate } from './i18n';
 import { grayToRgba, toGray } from './core/image';
 import {
   DEFAULT_TRACE,
+  FrameNotFoundError,
   detectFrame,
   prepare,
   rectify,
@@ -47,6 +49,21 @@ interface Session {
 }
 let session: Session | null = null;
 
+const langSelect = $<HTMLSelectElement>('lang');
+const savedLang = localStorageGet('lang');
+let lang: Lang = savedLang === 'it' || savedLang === 'en' ? savedLang : defaultLang(navigator.languages ?? [navigator.language]);
+let t: Translate = translator(lang);
+/** Re-renders the current status line in a new language. */
+let statusMessage: (() => string) | null = null;
+let statusIsError = false;
+langSelect.value = lang;
+langSelect.addEventListener('change', () => {
+  lang = langSelect.value as Lang;
+  localStorageSet('lang', lang);
+  applyLang();
+});
+applyLang();
+
 for (const f of FRAMES) frameSelect.add(new Option(f.name, f.id));
 const savedFrame = localStorageGet('frame');
 frameSelect.value = FRAMES.some((f) => f.id === savedFrame) ? savedFrame! : 'a4';
@@ -60,10 +77,10 @@ controls.centerline.checked = DEFAULT_TRACE.centerline;
 
 $('print-frame').addEventListener('click', () => {
   const frame = frameById(frameSelect.value);
-  const blob = new Blob([frameSvg(frame)], { type: 'image/svg+xml' });
+  const blob = new Blob([frameSvg(frame, lang)], { type: 'image/svg+xml' });
   const url = URL.createObjectURL(blob);
   // Opening the SVG on its own lets the browser print it at its real size in mm.
-  if (!window.open(url, '_blank')) void download(blob, `cornice-shapescraft-${frame.id}.svg`);
+  if (!window.open(url, '_blank')) void download(blob, `${lang === 'it' ? 'cornice' : 'frame'}-shapescraft-${frame.id}.svg`);
 });
 
 for (const id of ['camera', 'upload']) {
@@ -104,7 +121,7 @@ updateOutputs();
 async function processPhoto(file: File) {
   const frame = frameById(frameSelect.value);
   try {
-    setStatus('Carico la foto…');
+    setStatus(() => t('status.loading'));
     const bitmap = await createImageBitmap(file);
     const scale = Math.min(1, MAX_PHOTO_SIDE / Math.max(bitmap.width, bitmap.height));
     const w = Math.round(bitmap.width * scale);
@@ -117,11 +134,11 @@ async function processPhoto(file: File) {
     bitmap.close();
     const photo = toGray(ctx.getImageData(0, 0, w, h));
 
-    setStatus('Cerco la cornice…');
+    setStatus(() => t('status.detecting'));
     await nextFrame();
     const detection = detectFrame(photo, frame);
 
-    setStatus('Raddrizzo la prospettiva…');
+    setStatus(() => t('status.rectifying'));
     await nextFrame();
     const rectified = rectify(photo, frame, detection, PX_PER_MM);
     const prepared = prepare(rectified);
@@ -132,16 +149,13 @@ async function processPhoto(file: File) {
     updateOutputs();
     result.hidden = false;
     retrace();
-    const missing = 4 - detection.markerIds.length;
-    setStatus(
-      missing
-        ? `Cornice trovata con ${detection.markerIds.length} marker su 4: la scala potrebbe essere meno precisa.`
-        : 'Cornice trovata.',
-    );
+    const found = detection.markerIds.length;
+    setStatus(() => (found < 4 ? t('status.partial', { n: found }) : t('status.found')));
     result.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (err) {
     console.error(err);
-    setStatus(err instanceof Error ? err.message : String(err), true);
+    if (err instanceof FrameNotFoundError) setStatus(() => t('status.notFound', { n: err.markersFound }), true);
+    else setStatus(() => (err instanceof Error ? err.message : String(err)), true);
   }
 }
 
@@ -180,12 +194,12 @@ function render() {
     `<path d="${shapes.filter((s) => s.closed).map((s) => pathData(s)).join(' ')}" stroke="none"/>${paths}</g></svg>`;
 
   if (!polygons.length) {
-    summary.textContent = 'Nessuna forma trovata: prova ad alzare la soglia.';
+    summary.textContent = t('summary.none');
     return;
   }
   const box = boundingBox(polygons);
   summary.textContent =
-    `${polygons.length} ${controls.centerline.checked ? (polygons.length === 1 ? 'linea' : 'linee') : polygons.length === 1 ? 'forma' : 'forme'} · ` +
+    `${polygons.length} ${t(controls.centerline.checked ? (polygons.length === 1 ? 'summary.line' : 'summary.lines') : polygons.length === 1 ? 'summary.shape' : 'summary.shapes')} · ` +
     `${(box.maxX - box.minX).toFixed(1)} × ${(box.maxY - box.minY).toFixed(1)} mm`;
 }
 
@@ -193,7 +207,7 @@ function updateOutputs() {
   $<HTMLOutputElement>('threshold-out').value = Number(controls.threshold.value || 0).toFixed(2);
   $<HTMLOutputElement>('tolerance-out').value = `${controls.tolerance.value} mm`;
   $<HTMLOutputElement>('minarea-out').value = `${controls.minarea.value} mm²`;
-  $<HTMLOutputElement>('smooth-out').value = Number(controls.smooth.value) ? `${controls.smooth.value} mm` : 'no';
+  $<HTMLOutputElement>('smooth-out').value = Number(controls.smooth.value) ? `${controls.smooth.value} mm` : t('smooth.off');
 }
 
 async function grayUrl(r: Rectified): Promise<string> {
@@ -209,9 +223,23 @@ async function grayUrl(r: Rectified): Promise<string> {
   return URL.createObjectURL(blob);
 }
 
-function setStatus(text: string, error = false) {
-  status.textContent = text;
+function setStatus(message: () => string, error = false) {
+  statusMessage = message;
+  statusIsError = error;
+  status.textContent = message();
   status.classList.toggle('error', error);
+}
+
+function applyLang() {
+  t = translator(lang);
+  document.documentElement.lang = lang;
+  for (const el of document.querySelectorAll<HTMLElement>('[data-i18n]')) {
+    el.textContent = t(el.dataset.i18n as Parameters<Translate>[0]);
+  }
+  langSelect.setAttribute('aria-label', t('language'));
+  if (statusMessage) setStatus(statusMessage, statusIsError);
+  updateOutputs();
+  render();
 }
 
 function nextFrame() {
@@ -235,7 +263,7 @@ async function download(blob: Blob, name: string) {
       try {
         await downloads.save({ filename: name, data: blob });
       } catch (err) {
-        if ((err as { code?: string }).code !== 'declined') setStatus('Non riesco a salvare il file in questa pagina.', true);
+        if ((err as { code?: string }).code !== 'declined') setStatus(() => t('status.saveFailed'), true);
       }
       return;
     }

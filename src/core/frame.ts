@@ -1,5 +1,6 @@
 import { AR } from '../vendor/js-aruco2/aruco.js';
 import type { Point } from './homography';
+import { translator, type Lang } from '../i18n';
 
 export interface Rect { x: number; y: number; w: number; h: number }
 
@@ -37,7 +38,7 @@ export const FRAMES: FrameLayout[] = [
 
 export function frameById(id: string): FrameLayout {
   const frame = FRAMES.find((f) => f.id === id);
-  if (!frame) throw new Error(`Cornice sconosciuta: ${id}`);
+  if (!frame) throw new Error(`Unknown frame: ${id}`);
   return frame;
 }
 
@@ -111,7 +112,8 @@ export function markerCells(id: number): number[][] {
 }
 
 /** Printable SVG of the frame at real size. */
-export function frameSvg(f: FrameLayout): string {
+export function frameSvg(f: FrameLayout, lang: Lang = 'en'): string {
+  const t = translator(lang);
   const parts: string[] = [];
   const outer = outerRect(f);
   const win = windowRect(f);
@@ -153,9 +155,9 @@ export function frameSvg(f: FrameLayout): string {
   }
   const text = (y: number, size: number, body: string) =>
     `<text x="${cx}" y="${y}" font-family="sans-serif" font-size="${size}" text-anchor="middle">${body}</text>`;
-  parts.push(text(ry + 8, 3, `ShapesCraft ${f.id.toUpperCase()} · stampa al 100%: la linea = 100 mm`));
-  parts.push(text(f.margin + f.band / 2 - 1, 2.8, 'Incolla su cartoncino o plastica sottile,'));
-  parts.push(text(f.margin + f.band / 2 + 3, 2.8, 'poi ritaglia lungo le linee nere (bordo esterno e finestra)'));
+  parts.push(text(ry + 8, 3, `ShapesCraft ${f.id.toUpperCase()} · ${t('sheet.scale')}`));
+  parts.push(text(f.margin + f.band / 2 - 1, 2.8, t('sheet.glue1')));
+  parts.push(text(f.margin + f.band / 2 + 3, 2.8, t('sheet.glue2')));
 
   // Cut lines.
   for (const r of [outer, win]) {

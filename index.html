@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="it">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -10,37 +10,45 @@
   </head>
   <body>
     <header>
-      <h1>ShapesCraft</h1>
-      <p class="tagline">Dalla foto al vettoriale in scala reale</p>
+      <div class="title-row">
+        <h1>ShapesCraft</h1>
+        <select id="lang" aria-label="Language">
+          <option value="en">English</option>
+          <option value="it">Italiano</option>
+        </select>
+      </div>
+      <p class="tagline" data-i18n="tagline"></p>
+      <ol class="how" aria-label="How it works">
+        <li><span class="how-n">1</span><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M24 8v20M15 20l9 9 9-9"/><path d="M10 30v8h28v-8"/></svg><span data-i18n="how.download"></span></li>
+        <li><span class="how-n">2</span><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M15 18V8h18v10"/><rect x="8" y="18" width="32" height="14" rx="3"/><path d="M15 28h18v12H15z"/></svg><span data-i18n="how.print"></span></li>
+        <li><span class="how-n">3</span><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M8 16h8l3-5h10l3 5h8v22H8z"/><circle cx="24" cy="26" r="7"/></svg><span data-i18n="how.photo"></span></li>
+        <li><span class="how-n">4</span><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M13 6h16l8 8v28H13z"/><path d="M29 6v8h8"/><path d="M18 34c3-10 9-10 12-4"/></svg><span data-i18n="how.file"></span></li>
+      </ol>
     </header>
 
     <main>
       <section class="card">
-        <h2><span class="step">1</span> Cornice</h2>
+        <h2><span class="step">1</span> <span data-i18n="frame.title"></span></h2>
         <label class="row">
-          Formato
+          <span data-i18n="frame.format"></span>
           <select id="frame"></select>
         </label>
-        <p class="hint">
-          Stampa la cornice al 100% (senza "adatta alla pagina") e controlla che la linea di riferimento misuri 100 mm.
-          Per una cornice rigida incollala su cartoncino o plastica sottile e ritaglia bordo esterno e finestra.
-          Poi appoggiala sul disegno o sull'oggetto (su fondo bianco), che deve stare dentro la finestra.
-        </p>
+        <p class="hint" data-i18n="frame.hint"></p>
         <div class="buttons">
-          <button id="print-frame" type="button" class="secondary">Apri cornice da stampare</button>
+          <button id="print-frame" type="button" class="secondary" data-i18n="frame.open"></button>
         </div>
       </section>
 
       <section class="card">
-        <h2><span class="step">2</span> Foto</h2>
-        <p class="hint">Inquadra tutto il foglio con i quattro marker visibili. Luce uniforme, niente riflessi.</p>
+        <h2><span class="step">2</span> <span data-i18n="photo.title"></span></h2>
+        <p class="hint" data-i18n="photo.hint"></p>
         <div class="buttons">
           <label class="button">
-            Scatta foto
+            <span data-i18n="photo.take"></span>
             <input id="camera" type="file" accept="image/*" capture="environment" hidden />
           </label>
           <label class="button secondary">
-            Carica immagine
+            <span data-i18n="photo.upload"></span>
             <input id="upload" type="file" accept="image/*" hidden />
           </label>
         </div>
@@ -48,45 +56,45 @@
       </section>
 
       <section id="result" class="card" hidden>
-        <h2><span class="step">3</span> Vettoriale</h2>
+        <h2><span class="step">3</span> <span data-i18n="result.title"></span></h2>
         <div class="preview-wrap"><div id="preview" class="preview"></div></div>
         <p id="summary" class="summary"></p>
 
         <div class="controls">
           <label>
-            <span>Soglia <output id="threshold-out"></output></span>
+            <span><span data-i18n="threshold"></span> <output id="threshold-out"></output></span>
             <input id="threshold" type="range" min="0.1" max="0.95" step="0.01" />
           </label>
-          <button id="threshold-auto" type="button" class="link">Automatica</button>
+          <button id="threshold-auto" type="button" class="link" data-i18n="threshold.auto"></button>
           <label>
-            <span>Raddrizza linee <output id="tolerance-out"></output></span>
+            <span><span data-i18n="straighten"></span> <output id="tolerance-out"></output></span>
             <input id="tolerance" type="range" min="0.1" max="3" step="0.1" />
-            <small class="hint">A sinistra segue fedelmente il tratto, a destra toglie le irregolarità e raddrizza.</small>
+            <small class="hint" data-i18n="straighten.hint"></small>
           </label>
           <label>
-            <span>Ignora forme sotto <output id="minarea-out"></output></span>
+            <span><span data-i18n="minarea"></span> <output id="minarea-out"></output></span>
             <input id="minarea" type="range" min="0" max="100" step="1" />
           </label>
           <label>
-            <span>Levigatura <output id="smooth-out"></output></span>
+            <span><span data-i18n="smooth"></span> <output id="smooth-out"></output></span>
             <input id="smooth" type="range" min="0" max="10" step="0.5" />
-            <small class="hint">A sinistra segue ogni dettaglio, a destra toglie bozzi e rumore mantenendo curve e spigoli.</small>
+            <small class="hint" data-i18n="smooth.hint"></small>
           </label>
-          <label class="check"><input id="centerline" type="checkbox" /> Linea singola (centro del tratto)</label>
-          <small class="hint check-hint">Per disegni a penna: ogni tratto diventa una sola linea invece di un contorno chiuso. Utile per incisione e plotter.</small>
-          <label class="check"><input id="invert" type="checkbox" /> Forme chiare su fondo scuro</label>
-          <label class="check"><input id="show-photo" type="checkbox" checked /> Mostra foto sotto i tracciati</label>
+          <label class="check"><input id="centerline" type="checkbox" /> <span data-i18n="centerline"></span></label>
+          <small class="hint check-hint" data-i18n="centerline.hint"></small>
+          <label class="check"><input id="invert" type="checkbox" /> <span data-i18n="invert"></span></label>
+          <label class="check"><input id="show-photo" type="checkbox" checked /> <span data-i18n="show-photo"></span></label>
         </div>
 
         <div class="buttons">
-          <button id="download" type="button">Scarica SVG</button>
+          <button id="download" type="button" data-i18n="download"></button>
         </div>
       </section>
     </main>
 
     <footer class="site-footer">
-      ShapesCraft è software libero (AGPL-3.0) ·
-      <a href="https://github.com/AleDevi/ShapesCraft" target="_blank" rel="noopener">Codice sorgente</a>
+      <span data-i18n="footer.license"></span> ·
+      <a href="https://github.com/AleDevi/ShapesCraft" target="_blank" rel="noopener" data-i18n="footer.source"></a>
     </footer>
 
     <script type="module" src="./src/main.ts"></script>
