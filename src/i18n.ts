@@ -3,6 +3,10 @@ export type Lang = 'en' | 'it';
 const en = {
   tagline: 'From photo to true-scale vector',
   language: 'Language',
+  'how.download': 'Download',
+  'how.print': 'Print',
+  'how.photo': 'Take a picture',
+  'how.file': 'Get your file',
   'frame.title': 'Frame',
   'frame.format': 'Format',
   'frame.hint':
@@ -51,6 +55,10 @@ type Key = keyof typeof en;
 const it: Record<Key, string> = {
   tagline: 'Dalla foto al vettoriale in scala reale',
   language: 'Lingua',
+  'how.download': 'Scarica',
+  'how.print': 'Stampa',
+  'how.photo': 'Scatta una foto',
+  'how.file': 'Ottieni il file',
   'frame.title': 'Cornice',
   'frame.format': 'Formato',
   'frame.hint':
