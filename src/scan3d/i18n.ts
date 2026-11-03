@@ -47,7 +47,7 @@ const en = {
   'mat.round.hint': 'The round mat is the same from every side. Cut it out and put it on a turntable (even a kitchen one): keep the phone still and turn the object.',
   'pdf.scale': 'print at 100%: the line = 100 mm',
   'pdf.place': 'place the object here',
-  'footer.license': 'ShapesCraft is free software (AGPL-3.0)',
+  'footer.license': 'ShapesCraft is open source (Apache-2.0)',
   'footer.source': 'Source code',
 };
 
@@ -100,7 +100,7 @@ const it: Record<Key, string> = {
   'mat.round.hint': 'Il tappetino tondo è uguale da ogni lato. Ritaglialo e mettilo su un piatto girevole (anche da cucina): tieni fermo il telefono e fai girare l\'oggetto.',
   'pdf.scale': 'stampa al 100%: la linea = 100 mm',
   'pdf.place': 'appoggia qui l\'oggetto',
-  'footer.license': 'ShapesCraft è software libero (AGPL-3.0)',
+  'footer.license': 'ShapesCraft è open source (Apache-2.0)',
   'footer.source': 'Codice sorgente',
 };
 

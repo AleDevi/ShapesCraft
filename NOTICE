@@ -1,0 +1,13 @@
+ShapesCraft
+Copyright 2026 Alessandro Devigili
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+This product includes software developed by third parties:
+
+- js-aruco2 (src/vendor/js-aruco2/), MIT License,
+  Copyright (c) 2020 Damiano Falcioni, Copyright (c) 2011 Juan Mellado.
+  It contains code derived from ArUco (BSD License) and OpenCV
+  (BSD License, Copyright (C) 2000-2008 Intel Corporation).
+  Full texts: src/vendor/js-aruco2/LICENSE.txt, also published with the app
+  as THIRD-PARTY-NOTICES.txt.
