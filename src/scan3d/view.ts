@@ -1,9 +1,11 @@
-import { MAT, matMarkers, objectArea } from './mat';
+import { matById, type MatLayout } from './mat';
 import { cameraCenter, type SolvedPhoto, type Vec3 } from './pose';
+
+let shown: MatLayout = matById('rect');
 
 /** Mat millimetres → display space: origin at the mat centre, y up. */
 function toDisplay(p: Vec3): Vec3 {
-  return [p[0] - MAT.width / 2, -p[2], p[1] - MAT.height / 2];
+  return [p[0] - shown.center.x, -p[2], p[1] - shown.center.y];
 }
 
 export interface Colors { text: string; muted: string; accent: string; border: string; card: string; good: string; fair: string; poor: string }
@@ -44,7 +46,8 @@ export class SceneView {
     canvas.addEventListener('pointercancel', end);
   }
 
-  set(photos: SolvedPhoto[], photoSize: { width: number; height: number; focal: number }) {
+  set(mat: MatLayout, photos: SolvedPhoto[], photoSize: { width: number; height: number; focal: number }) {
+    shown = mat;
     this.photos = photos;
     this.photoSize = photoSize;
     this.draw();
@@ -95,11 +98,10 @@ export class SceneView {
     const flat = (x: number, y: number): Vec3 => toDisplay([x, y, 0]);
 
     // The mat, its markers and the object area.
-    poly([flat(0, 0), flat(MAT.width, 0), flat(MAT.width, MAT.height), flat(0, MAT.height)], c.card, c.border);
-    for (const m of matMarkers()) poly(m.corners.map((q) => flat(q.x, q.y)), c.muted);
-    const a = objectArea();
+    poly(shown.outline.map((q) => flat(q.x, q.y)), c.card, c.border);
+    for (const m of shown.markers) poly(m.corners.map((q) => flat(q.x, q.y)), c.muted);
     ctx.setLineDash([4, 4]);
-    poly([flat(a.x, a.y), flat(a.x + a.w, a.y), flat(a.x + a.w, a.y + a.h), flat(a.x, a.y + a.h)], undefined, c.muted);
+    poly(shown.area.map((q) => flat(q.x, q.y)), undefined, c.muted);
     ctx.setLineDash([]);
 
     // Cameras, farthest first so nearer ones are drawn on top.

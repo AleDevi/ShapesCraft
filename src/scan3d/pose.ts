@@ -3,12 +3,14 @@ import { DICTIONARY } from '../core/frame';
 import { applyH, findHomography, invert3, solve, type Mat3, type Point } from '../core/homography';
 import { downscale, grayToRgba, type Gray } from '../core/image';
 import { refineQuad } from '../core/pipeline';
-import { MAT, matMarkers } from './mat';
+import { MATS, matById, matOfMarker, type MatId } from './mat';
 
 /** Marker corners found in one photo: mat millimetres and photo pixels, pair by pair. */
 export interface MatDetection {
   width: number;
   height: number;
+  /** Which mat was recognised: the one with the most markers in view. */
+  matId: MatId;
   markerIds: number[];
   mat: Point[];
   px: Point[];
@@ -30,7 +32,14 @@ export function detectMat(photo: Gray): MatDetection {
   const factor = Math.max(1, Math.ceil(Math.max(photo.width, photo.height) / DETECT_MAX_SIDE));
   const small = downscale(photo, factor);
   const found = new AR.Detector({ dictionaryName: DICTIONARY }).detect(grayToRgba(small));
-  const byId = new Map(matMarkers().map((m) => [m.id, m.corners]));
+  // The mat with the most markers in view; markers of any other mat are ignored.
+  const votes = new Map<MatId, number>();
+  for (const m of found) {
+    const id = matOfMarker(m.id);
+    if (id) votes.set(id, (votes.get(id) ?? 0) + 1);
+  }
+  const matId = [...votes.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? MATS[0].id;
+  const byId = new Map(matById(matId).markers.map((m) => [m.id, m.corners]));
 
   let ids: number[] = [];
   let mat: Point[][] = [];
@@ -57,7 +66,7 @@ export function detectMat(photo: Gray): MatDetection {
     mat = mat.filter((_, i) => i !== worst);
     px = px.filter((_, i) => i !== worst);
   }
-  return { width: photo.width, height: photo.height, markerIds: ids, mat: mat.flat(), px: px.flat() };
+  return { width: photo.width, height: photo.height, matId, markerIds: ids, mat: mat.flat(), px: px.flat() };
 }
 
 const dist = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -282,8 +291,9 @@ function solvePhoto(d: MatDetection, focal: number): SolvedPhoto {
   meanMm /= d.px.length;
 
   const c = cameraCenter(pose);
-  const dx = c[0] - MAT.width / 2;
-  const dy = c[1] - MAT.height / 2;
+  const centre = matById(d.matId).center;
+  const dx = c[0] - centre.x;
+  const dy = c[1] - centre.y;
   const heightMm = -c[2];
   const ground = Math.hypot(dx, dy);
   return {
@@ -308,6 +318,7 @@ function totalCost(dets: MatDetection[], focal: number): number {
  * golden-section search for the focal length with the lowest total reprojection error.
  */
 export function solveSession(dets: MatDetection[]): SolvedSession {
+  if (new Set(dets.map((d) => d.matId)).size > 1) throw new Error('All views must show the same mat');
   const guesses = dets.map(focalFromHomography).map((f, i) => (f ? f / Math.max(dets[i].width, dets[i].height) : null)).filter((f): f is number => f !== null);
   let focal = DEFAULT_FOCAL;
   let focalFromData = false;

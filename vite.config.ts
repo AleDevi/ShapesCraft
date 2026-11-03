@@ -16,7 +16,9 @@ function framePdfs(): Plugin {
         }
       }
       for (const lang of ['en', 'it'] as const) {
-        this.emitFile({ type: 'asset', fileName: `frames/${matPdfName(lang)}`, source: matPdf(lang) });
+        for (const mat of ['rect', 'round'] as const) {
+          this.emitFile({ type: 'asset', fileName: `frames/${matPdfName(mat, lang)}`, source: matPdf(mat, lang) });
+        }
       }
     },
   };

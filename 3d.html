@@ -28,11 +28,18 @@
     <main>
       <section class="card">
         <h2><span class="step">1</span> <span data-i18n="mat.title"></span></h2>
+        <div class="segmented mat-choice" role="radiogroup" aria-label="Mat">
+          <div>
+            <label><input type="radio" name="mat" value="rect" checked /> <span data-i18n="mat.rect"></span></label>
+            <label><input type="radio" name="mat" value="round" /> <span data-i18n="mat.round"></span></label>
+          </div>
+        </div>
         <div class="buttons">
           <button id="share-mat" type="button" data-i18n="mat.share" hidden></button>
           <button id="download-mat" type="button" class="secondary" data-i18n="mat.download"></button>
         </div>
         <p class="hint" data-i18n="mat.hint"></p>
+        <p id="round-hint" class="hint" data-i18n="mat.round.hint" hidden></p>
       </section>
 
       <section class="card">

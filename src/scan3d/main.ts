@@ -5,6 +5,7 @@ import { toGray } from '../core/image';
 import { translator3d, type Translate3d } from './i18n';
 import { matPdf, matPdfName } from './pdf';
 import { MatNotFoundError, detectMat, solveSession, type MatDetection, type SolvedSession } from './pose';
+import { matById, type MatId } from './mat';
 import { FAIR_MM, GOOD_MM, SceneView, drawCoverage, quality, type Colors } from './view';
 import { sharpestFrames } from './video';
 
@@ -37,8 +38,24 @@ langSelect.addEventListener('change', () => {
 const scene = new SceneView($<HTMLCanvasElement>('scene'), colors);
 applyLang();
 
+const matRadios = [...document.querySelectorAll<HTMLInputElement>('input[name="mat"]')];
+const savedMat = storageGet('mat3d');
+for (const r of matRadios) {
+  r.checked = r.value === (savedMat === 'round' ? 'round' : 'rect');
+  r.addEventListener('change', () => {
+    storageSet('mat3d', selectedMat());
+    $('round-hint').hidden = selectedMat() !== 'round';
+  });
+}
+$('round-hint').hidden = selectedMat() !== 'round';
+
+function selectedMat(): MatId {
+  return matRadios.find((r) => r.checked)?.value === 'round' ? 'round' : 'rect';
+}
+
 function matFile(): File {
-  return new File([matPdf(lang) as BlobPart], matPdfName(lang), { type: 'application/pdf' });
+  const mat = selectedMat();
+  return new File([matPdf(mat, lang) as BlobPart], matPdfName(mat, lang), { type: 'application/pdf' });
 }
 const shareButton = $<HTMLButtonElement>('share-mat');
 shareButton.hidden = !navigator.canShare?.({ files: [matFile()] });
@@ -191,6 +208,11 @@ async function readPhotos(files: File[]) {
 async function solveAndRender() {
   setStatus(() => t('status.solving'));
   await nextFrame();
+  // Only the mat seen in most views counts: a stray view of the other mat is left out.
+  const counts = new Map<MatId, number>();
+  for (const s of shots) counts.set(s.det.matId, (counts.get(s.det.matId) ?? 0) + 1);
+  const main = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  shots = shots.filter((s) => s.det.matId === main);
   solved = shots.length ? solveSession(shots.map((s) => s.det)) : null;
   setStatus(solved ? () => t('status.done', { count: shots.length }) : null);
   render();
@@ -217,7 +239,7 @@ function render() {
   });
 
   const d0 = shots[0].det;
-  scene.set(photos, { width: d0.width, height: d0.height, focal: solved.focal });
+  scene.set(matById(d0.matId), photos, { width: d0.width, height: d0.height, focal: solved.focal });
   drawCoverage($<HTMLCanvasElement>('coverage'), photos, colors());
 
   const table = $<HTMLTableElement>('table');

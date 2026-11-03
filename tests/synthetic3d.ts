@@ -1,21 +1,23 @@
 import { markerCells } from '../src/core/frame';
 import { invert3, applyH, type Mat3 } from '../src/core/homography';
 import type { Gray } from '../src/core/image';
-import { MAT, matMarkers } from '../src/scan3d/mat';
+import { matById, type MatId, type MatLayout } from '../src/scan3d/mat';
 import type { Vec3 } from '../src/scan3d/pose';
 
-const markers = matMarkers();
-
-/** Brightness of the printed mat at a point in mm, lying on a darker table. */
-function matValue(x: number, y: number): number {
-  if (x < 0 || y < 0 || x > MAT.width || y > MAT.height) return 0.3;
-  for (const m of markers) {
-    const o = m.corners[0];
-    const s = MAT.marker;
-    if (x >= o.x && x < o.x + s && y >= o.y && y < o.y + s) {
+/** Brightness of a printed mat at a point in mm, lying on a darker table. */
+function matValue(mat: MatLayout, x: number, y: number): number {
+  if (x < 0 || y < 0 || x > mat.width || y > mat.height) return 0.3;
+  for (const m of mat.markers) {
+    const [c0, c1, , c3] = m.corners;
+    // Position inside the (possibly rotated) marker square, as fractions of its sides.
+    const ux = c1.x - c0.x, uy = c1.y - c0.y, vx = c3.x - c0.x, vy = c3.y - c0.y;
+    const s2 = ux * ux + uy * uy;
+    const a = ((x - c0.x) * ux + (y - c0.y) * uy) / s2;
+    const b = ((x - c0.x) * vx + (y - c0.y) * vy) / s2;
+    if (a >= 0 && a < 1 && b >= 0 && b < 1) {
       const cells = markerCells(m.id);
       const n = cells.length;
-      return cells[Math.floor(((y - o.y) / s) * n)][Math.floor(((x - o.x) / s) * n)] ? 0.95 : 0.08;
+      return cells[Math.floor(b * n)][Math.floor(a * n)] ? 0.95 : 0.08;
     }
   }
   return 0.95;
@@ -29,8 +31,9 @@ const unit = (a: Vec3): Vec3 => {
 };
 
 /** A camera at `c` (mat mm, z into the table) looking at the mat centre, and its photo. */
-export function shoot(c: Vec3, f: number, width: number, height: number): Gray {
-  const target: Vec3 = [MAT.width / 2, MAT.height / 2, 0];
+export function shoot(c: Vec3, f: number, width: number, height: number, matId: MatId = 'rect'): Gray {
+  const mat = matById(matId);
+  const target: Vec3 = [mat.center.x, mat.center.y, 0];
   const z = unit(sub(target, c));
   const x = unit(cross(z, [0, 0, -1]));
   const y = cross(z, x);
@@ -49,7 +52,7 @@ export function shoot(c: Vec3, f: number, width: number, height: number): Gray {
       for (const sy of [0.25, 0.75])
         for (const sx of [0.25, 0.75]) {
           const p = applyH(back, { x: px + sx, y: py + sy });
-          v += matValue(p.x, p.y);
+          v += matValue(mat, p.x, p.y);
         }
       data[py * width + px] = v / 4;
     }
