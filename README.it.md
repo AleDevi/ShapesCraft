@@ -16,7 +16,7 @@ L'app è in italiano e in inglese: segue la lingua del telefono e si può cambia
 2. Per una cornice rigida incollala su cartoncino o plastica sottile e ritaglia lungo le linee nere (bordo esterno e finestra centrale). In alternativa usa il foglio così com'è e disegna dentro la finestra.
 3. Appoggia la cornice sul disegno (pennarello scuro su carta bianca) o sull'oggetto, che deve stare dentro la finestra.
 4. Scatta la foto inquadrando tutta la cornice. L'app trova i marker, raddrizza la prospettiva e traccia i contorni.
-5. Regola soglia, raddrizzamento e levigatura, poi scarica l'SVG (unità in millimetri).
+5. Regola soglia, raddrizzamento e levigatura, poi scegli il formato e scarica o condividi il file: SVG, DXF (R12), PDF in scala reale o PNG a 300 dpi, sempre in millimetri.
 
 ## Come funziona
 
@@ -27,6 +27,7 @@ L'app è in italiano e in inglese: segue la lingua del telefono e si può cambia
 - **Linea singola**: assottigliamento Zhang–Suen dell'inchiostro, scheletro diviso in rami tra estremi e incroci, rimozione dei rami spuri, estremi riallungati di mezzo tratto; i tracciati aperti escono come linee non chiuse nell'SVG.
 
 - **PDF della cornice**: un piccolo generatore interno trasforma lo stesso disegno della cornice SVG in un PDF vettoriale (Helvetica, WinAnsi). La build pubblica anche tutte le cornici in `frames/`, così un computer può aprirle da link.
+- **Esportazioni**: SVG e PDF mantengono le curve di Bézier; DXF R12 (una polilinea per forma, curve spezzate entro 0,02 mm, asse y verso l'alto) per CAD e CNC; PNG disegnato su canvas con i dpi scritti in un chunk `pHYs`, così si apre in scala reale.
 
 Tutto gira nel browser, nessun server.
 

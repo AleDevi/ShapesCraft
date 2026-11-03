@@ -124,8 +124,21 @@
           <label class="check"><input id="show-photo" type="checkbox" checked /> <span data-i18n="show-photo"></span></label>
         </div>
 
-        <div class="buttons">
-          <button id="download" type="button" data-i18n="download"></button>
+        <div class="export">
+          <div class="segmented formats" role="radiogroup" aria-labelledby="format-label">
+            <span id="format-label" data-i18n="format.title"></span>
+            <div>
+              <label><input type="radio" name="format" value="svg" checked /> <span>SVG</span></label>
+              <label><input type="radio" name="format" value="dxf" /> <span>DXF</span></label>
+              <label><input type="radio" name="format" value="pdf" /> <span>PDF</span></label>
+              <label><input type="radio" name="format" value="png" /> <span>PNG</span></label>
+            </div>
+          </div>
+          <small id="format-hint" class="hint"></small>
+          <div class="buttons">
+            <button id="download" type="button"></button>
+            <button id="share" type="button" class="secondary" hidden></button>
+          </div>
         </div>
         </div>
       </section>
