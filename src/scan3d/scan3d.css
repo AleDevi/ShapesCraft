@@ -28,3 +28,7 @@ a.link { color: var(--accent); text-decoration: none; font-weight: 500; }
 .poses th { color: var(--muted); font-weight: 500; }
 .poses td.q { width: 10px; padding: 0; }
 .poses td.q span { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
+
+.photos-alt { margin: 10px 0 0; }
+.link-label { color: var(--accent); cursor: pointer; font-weight: 500; }
+#progress { width: 100%; margin-top: 12px; accent-color: var(--accent); }

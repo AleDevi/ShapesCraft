@@ -16,7 +16,8 @@ export interface MatDetection {
 
 /** Fewer markers than needed were found to locate the mat. */
 export class MatNotFoundError extends Error {
-  constructor(readonly markersFound: number) {
+  /** `frame2d`: the markers of the 2D frame were seen instead, so the wrong sheet was printed. */
+  constructor(readonly markersFound: number, readonly frame2d = false) {
     super(`Mat not found: ${markersFound} markers recognised.`);
     this.name = 'MatNotFoundError';
   }
@@ -42,7 +43,7 @@ export function detectMat(photo: Gray): MatDetection {
     mat.push(corners);
     px.push(refineQuad(photo, rough, 2 * factor + 2));
   }
-  if (ids.length < MIN_MARKERS) throw new MatNotFoundError(ids.length);
+  if (ids.length < MIN_MARKERS) throw new MatNotFoundError(ids.length, found.some((m) => m.id >= 0 && m.id <= 3));
 
   // A misread marker id lands far from where the others predict it: drop it and refit.
   // The mat is flat, so a homography predicts every corner exactly.

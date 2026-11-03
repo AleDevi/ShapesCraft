@@ -39,14 +39,18 @@
         <p class="hint" data-i18n="photos.hint"></p>
         <div class="buttons">
           <label class="button">
-            <span data-i18n="photos.take"></span>
-            <input id="camera" type="file" accept="image/*" capture="environment" hidden />
+            <span data-i18n="video.record"></span>
+            <input id="video-camera" type="file" accept="video/*" capture="environment" hidden />
           </label>
           <label class="button secondary">
-            <span data-i18n="photos.upload"></span>
-            <input id="upload" type="file" accept="image/*" multiple hidden />
+            <span data-i18n="video.upload"></span>
+            <input id="video-upload" type="file" accept="video/*" hidden />
           </label>
         </div>
+        <p class="hint photos-alt">
+          <label class="link-label"><span data-i18n="photos.upload"></span><input id="upload" type="file" accept="image/*" multiple hidden /></label>
+        </p>
+        <progress id="progress" max="1" value="0" hidden></progress>
         <p id="status" class="status" role="status"></p>
         <ul id="errors" class="errors"></ul>
       </section>

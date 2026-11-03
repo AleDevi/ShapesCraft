@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { cameraCenter, detectMat, solveSession, type Vec3 } from '../src/scan3d/pose';
+import { MatNotFoundError, cameraCenter, detectMat, solveSession, type Vec3 } from '../src/scan3d/pose';
+import { renderPhoto } from './synthetic';
 import { shoot } from './synthetic3d';
 
 describe('3D mat camera poses', () => {
@@ -31,5 +32,21 @@ describe('3D mat camera poses', () => {
       expect(p.rmsPx).toBeLessThan(1);
       expect(p.meanMm).toBeLessThan(0.5);
     });
+  });
+});
+
+describe('wrong sheet', () => {
+  it('tells when the 2D frame was printed instead of the 3D mat', () => {
+    const { photo } = renderPhoto('a4', () => false, { width: 900, height: 1200 }, [
+      { x: 100, y: 120 }, { x: 800, y: 100 }, { x: 820, y: 1100 }, { x: 90, y: 1080 },
+    ]);
+    let error: unknown;
+    try {
+      detectMat(photo);
+    } catch (err) {
+      error = err;
+    }
+    expect(error).toBeInstanceOf(MatNotFoundError);
+    expect((error as MatNotFoundError).frame2d).toBe(true);
   });
 });

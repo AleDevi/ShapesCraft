@@ -8,8 +8,15 @@ function toDisplay(p: Vec3): Vec3 {
 
 export interface Colors { text: string; muted: string; accent: string; border: string; card: string; good: string; fair: string; poor: string }
 
+/**
+ * Limits on the mean error of single marker corners, in mm. Each camera pose averages
+ * well over a hundred corners, so the pose itself is several times more precise.
+ */
+export const GOOD_MM = 1.5;
+export const FAIR_MM = 3;
+
 export function quality(p: SolvedPhoto): 'good' | 'fair' | 'poor' {
-  return p.meanMm < 0.5 ? 'good' : p.meanMm < 1.2 ? 'fair' : 'poor';
+  return p.meanMm < GOOD_MM ? 'good' : p.meanMm < FAIR_MM ? 'fair' : 'poor';
 }
 
 /** A small orbiting 3D view of the mat and of where each photo was taken. */
