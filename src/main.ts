@@ -1,4 +1,5 @@
 import './style.css';
+import { registerServiceWorker, setupInstall } from './pwa';
 import { FRAMES, frameById } from './core/frame';
 import { framePdf, framePdfName } from './core/pdf';
 import { defaultLang, translator, type Lang, type Translate } from './i18n';
@@ -430,3 +431,6 @@ function localStorageSet(key: string, value: string) {
     // Storage may be unavailable (private mode); the preference just isn't remembered.
   }
 }
+
+registerServiceWorker();
+setupInstall(document.getElementById('install') as HTMLButtonElement, document.getElementById('install-ios')!);

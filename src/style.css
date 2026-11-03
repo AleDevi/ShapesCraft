@@ -215,3 +215,7 @@ button.link {
 .new-3d a { color: var(--accent); font-weight: 500; text-decoration: none; }
 
 h1 .logo { width: 1.25em; height: 1.25em; vertical-align: -0.22em; margin-right: 0.4em; border-radius: 22%; }
+
+.install { text-align: center; margin: 12px 0 0; }
+.install button { flex: none; min-width: 200px; }
+.install .hint { margin: 6px 0 0; }

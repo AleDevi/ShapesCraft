@@ -5,15 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="referrer" content="strict-origin-when-cross-origin" />
     <meta name="theme-color" content="#1f6feb" />
-    <link rel="icon" href="./favicon.png" type="image/png" />
-    <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
+    <link rel="icon" href="./hummingbird.png" type="image/png" />
+    <link rel="apple-touch-icon" href="./hummingbird-touch.png" />
     <link rel="manifest" href="./manifest.webmanifest" />
     <title>ShapesCraft</title>
   </head>
   <body>
     <header>
       <div class="title-row">
-        <h1><img src="./favicon.png" alt="" class="logo" width="32" height="32" />ShapesCraft</h1>
+        <h1><img src="./hummingbird.png" alt="" class="logo" width="32" height="32" />ShapesCraft</h1>
         <div class="title-tools">
           <button id="help" type="button" class="link" data-i18n="nav.help" hidden></button>
           <select id="lang" aria-label="Language">
@@ -48,6 +48,10 @@
         <button id="start" type="button" class="big" data-i18n="welcome.start"></button>
       </div>
       <p class="new-3d"><a href="./3d.html" data-i18n="welcome.3d"></a></p>
+      <div class="install">
+        <button id="install" type="button" class="secondary" data-i18n="install.button" hidden></button>
+        <p id="install-ios" class="hint" data-i18n="install.ios" hidden></p>
+      </div>
     </main>
 
     <main id="app" hidden>

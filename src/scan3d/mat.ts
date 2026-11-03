@@ -9,10 +9,11 @@ import type { Point } from '../core/homography';
  * (0..3). All measures in millimetres, origin at the sheet's top-left corner.
  *
  * - `rect`: 30 markers along the edge of the sheet.
- * - `round`: 20 markers on a circle, the same from every side. It can be cut out and
- *   put on a turntable: the phone then stays still and the object turns.
+ * - `round`, `round-a3`, `round-small`: markers on a circle, the same from every side,
+ *   on A4, on A3 for bigger objects and a smaller one for small objects. They can be cut
+ *   out and put on a turntable: the phone then stays still and the object turns.
  */
-export type MatId = 'rect' | 'round';
+export type MatId = 'rect' | 'round' | 'round-a3' | 'round-small';
 
 export interface MatMarker { id: number; corners: Point[] }
 
@@ -28,9 +29,14 @@ export interface MatLayout {
   outline: Point[];
   /** Outline of the area for the object. */
   area: Point[];
+  /** Round mats: radii of the cut line, of the ring of marker centres and of the object area. */
+  round?: RoundSpec;
 }
 
+interface RoundSpec { cut: number; ring: number; area: number; marker: number; count: number; firstId: number }
+
 const A4 = { width: 210, height: 297 };
+const A3 = { width: 297, height: 420 };
 
 /** Evenly spaced positions of `count` squares of `size` between `from` and `to`. */
 function spread(from: number, to: number, count: number, size: number): number[] {
@@ -71,11 +77,8 @@ function rectMat(): MatLayout {
   };
 }
 
-/** Radius of the round mat's cut line, of the ring of marker centres, and of the object area. */
-export const ROUND = { center: { x: 105, y: 135 }, cut: 98, ring: 82, area: 60, marker: 18, count: 20 } as const;
-
-function roundMat(): MatLayout {
-  const { center: c, ring, marker: s, count } = ROUND;
+function roundMat(id: MatId, paper: { width: number; height: number }, c: Point, spec: RoundSpec): MatLayout {
+  const { ring, marker: s, count, firstId } = spec;
   const markers = Array.from({ length: count }, (_, i) => {
     // Clockwise from the top; each marker upright when seen from outside the circle.
     const phi = -Math.PI / 2 + (i / count) * 2 * Math.PI;
@@ -85,19 +88,21 @@ function roundMat(): MatLayout {
     const p = { x: c.x + ring * u.x, y: c.y + ring * u.y };
     const o = { x: p.x - (s / 2) * (ex.x + ey.x), y: p.y - (s / 2) * (ex.y + ey.y) };
     const at = (a: number, b: number) => ({ x: o.x + a * ex.x + b * ey.x, y: o.y + a * ex.y + b * ey.y });
-    return { id: 40 + i, corners: [at(0, 0), at(s, 0), at(s, s), at(0, s)] };
+    return { id: firstId + i, corners: [at(0, 0), at(s, 0), at(s, s), at(0, s)] };
   });
-  return {
-    id: 'round',
-    ...A4,
-    center: c,
-    markers,
-    outline: circle(c, ROUND.cut),
-    area: circle(c, ROUND.area),
-  };
+  return { id, ...paper, center: c, markers, outline: circle(c, spec.cut), area: circle(c, spec.area), round: spec };
 }
 
-export const MATS: MatLayout[] = [rectMat(), roundMat()];
+// Each mat has its own range of marker ids, so a video tells which mat it shows.
+export const MATS: MatLayout[] = [
+  rectMat(),
+  // Ø 196 mm, object area Ø 120 mm.
+  roundMat('round', A4, { x: 105, y: 135 }, { cut: 98, ring: 82, area: 60, marker: 18, count: 20, firstId: 40 }),
+  // Ø 280 mm, object area Ø 180 mm.
+  roundMat('round-a3', A3, { x: 148.5, y: 195 }, { cut: 140, ring: 118, area: 90, marker: 22, count: 24, firstId: 60 }),
+  // Ø 132 mm, object area Ø 72 mm: small objects fill more of the picture.
+  roundMat('round-small', A4, { x: 105, y: 110 }, { cut: 66, ring: 54, area: 36, marker: 14, count: 16, firstId: 84 }),
+];
 
 export function matById(id: MatId): MatLayout {
   return MATS.find((m) => m.id === id)!;
@@ -151,7 +156,7 @@ export function matDrawing(mat: MatLayout, labels: MatLabels): FrameOp[] {
 
   // Object area, a small cross at the centre, and the cut line of the round mat.
   ops.push(...outlineOps(mat.area, 0.2));
-  if (mat.id === 'round') ops.push(...outlineOps(mat.outline, 0.3));
+  if (mat.round) ops.push(...outlineOps(mat.outline, 0.3));
   const c = mat.center;
   ops.push({ kind: 'line', x1: c.x - 5, y1: c.y, x2: c.x + 5, y2: c.y, width: 0.2 });
   ops.push({ kind: 'line', x1: c.x, y1: c.y - 5, x2: c.x, y2: c.y + 5, width: 0.2 });
@@ -159,16 +164,16 @@ export function matDrawing(mat: MatLayout, labels: MatLabels): FrameOp[] {
 
   // 100 mm ruler, to check the print scale: inside the area of the sheet mat, below the circle of the round one.
   const areaBottom = Math.max(...mat.area.map((p) => p.y));
-  const ry = mat.id === 'rect' ? areaBottom - 14 : c.y + ROUND.cut + 20;
-  const rx = A4.width / 2 - 50;
+  const ry = mat.round ? c.y + mat.round.cut + 20 : areaBottom - 14;
+  const rx = mat.width / 2 - 50;
   ops.push({ kind: 'line', x1: rx, y1: ry, x2: rx + 100, y2: ry, width: 0.3 });
   for (let i = 0; i <= 10; i++) {
     const len = i % 5 === 0 ? 3 : 1.5;
     ops.push({ kind: 'line', x1: rx + i * 10, y1: ry, x2: rx + i * 10, y2: ry + len, width: 0.3 });
   }
-  ops.push({ kind: 'text', x: A4.width / 2, y: ry + 8, size: 3, body: labels.scale });
-  const titleY = mat.id === 'rect' ? Math.min(...mat.area.map((p) => p.y)) + 8 : c.y - ROUND.cut - 10;
-  ops.push({ kind: 'text', x: A4.width / 2, y: titleY, size: 3.2, body: labels.title });
-  if (mat.id === 'round' && labels.cut) ops.push({ kind: 'text', x: A4.width / 2, y: ry + 15, size: 2.8, body: labels.cut });
+  ops.push({ kind: 'text', x: mat.width / 2, y: ry + 8, size: 3, body: labels.scale });
+  const titleY = mat.round ? c.y - mat.round.cut - 10 : Math.min(...mat.area.map((p) => p.y)) + 8;
+  ops.push({ kind: 'text', x: mat.width / 2, y: titleY, size: 3.2, body: labels.title });
+  if (mat.round && labels.cut) ops.push({ kind: 'text', x: mat.width / 2, y: ry + 15, size: 2.8, body: labels.cut });
   return ops;
 }

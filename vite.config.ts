@@ -2,6 +2,7 @@ import { fileURLToPath } from 'node:url';
 import { defineConfig, type Plugin } from 'vite';
 import { FRAMES } from './src/core/frame';
 import { framePdf, framePdfName } from './src/core/pdf';
+import { MATS } from './src/scan3d/mat';
 import { matPdf, matPdfName } from './src/scan3d/pdf';
 
 /** Publishes every frame PDF next to the app, so a computer can open it by link. */
@@ -16,7 +17,7 @@ function framePdfs(): Plugin {
         }
       }
       for (const lang of ['en', 'it'] as const) {
-        for (const mat of ['rect', 'round'] as const) {
+        for (const { id: mat } of MATS) {
           this.emitFile({ type: 'asset', fileName: `frames/${matPdfName(mat, lang)}`, source: matPdf(mat, lang) });
         }
       }
@@ -32,6 +33,8 @@ function framePdfs(): Plugin {
 const CSP = [
   "default-src 'none'",
   "script-src 'self'",
+  // The service worker that makes the app installable and usable offline.
+  "worker-src 'self'",
   "style-src 'self'",
   "img-src 'self' blob: data:",
   "connect-src 'self'",

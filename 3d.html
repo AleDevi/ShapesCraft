@@ -5,15 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="referrer" content="strict-origin-when-cross-origin" />
     <meta name="theme-color" content="#1f6feb" />
-    <link rel="icon" href="./favicon.png" type="image/png" />
-    <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
+    <link rel="icon" href="./hummingbird.png" type="image/png" />
+    <link rel="apple-touch-icon" href="./hummingbird-touch.png" />
     <link rel="manifest" href="./manifest.webmanifest" />
     <title>ShapesCraft 3D</title>
   </head>
   <body>
     <header>
       <div class="title-row">
-        <h1><img src="./favicon.png" alt="" class="logo" width="32" height="32" />ShapesCraft 3D</h1>
+        <h1><img src="./hummingbird.png" alt="" class="logo" width="32" height="32" />ShapesCraft 3D</h1>
         <div class="title-tools">
           <a id="back" href="./index.html" class="link" data-i18n="nav.back"></a>
           <select id="lang" aria-label="Language">
@@ -23,6 +23,10 @@
         </div>
       </div>
       <p class="lead" data-i18n="lead"></p>
+      <div class="install">
+        <button id="install" type="button" class="secondary" data-i18n="install.button" hidden></button>
+        <p id="install-ios" class="hint" data-i18n="install.ios" hidden></p>
+      </div>
     </header>
 
     <main>
@@ -32,6 +36,8 @@
           <div>
             <label><input type="radio" name="mat" value="rect" checked /> <span data-i18n="mat.rect"></span></label>
             <label><input type="radio" name="mat" value="round" /> <span data-i18n="mat.round"></span></label>
+            <label><input type="radio" name="mat" value="round-a3" /> <span data-i18n="mat.round-a3"></span></label>
+            <label><input type="radio" name="mat" value="round-small" /> <span data-i18n="mat.round-small"></span></label>
           </div>
         </div>
         <div class="buttons">

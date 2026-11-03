@@ -33,3 +33,5 @@ a.link { color: var(--accent); text-decoration: none; font-weight: 500; }
 .link-label { color: var(--accent); cursor: pointer; font-weight: 500; }
 #progress { width: 100%; margin-top: 12px; accent-color: var(--accent); }
 .mat-choice { margin-bottom: 12px; }
+.mat-choice > div { grid-template-columns: 1fr 1fr; }
+.mat-choice label { min-height: 44px; text-align: center; padding: 0 6px; }
