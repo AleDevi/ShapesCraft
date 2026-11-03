@@ -16,12 +16,15 @@ import {
   type TraceOptions,
   type Traced,
 } from './core/pipeline';
-import { boundingBox, exportSvg, pathData } from './core/svg';
+import { boundingBox, exportArea, exportSvg, pathData } from './core/svg';
+import { FORMATS, MIME, exportDxf, exportName, exportPdf, pngDpi, pngWithDpi, type Format } from './core/export';
 
 /** Resolution of the straightened image: 0.2 mm per pixel. */
 const PX_PER_MM = 5;
 /** Photos are downscaled to this longest side to keep memory in check on phones. */
 const MAX_PHOTO_SIDE = 4000;
+/** Margin around the drawing in every exported file. */
+const PADDING_MM = 2;
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -40,6 +43,7 @@ const controls = {
   centerline: $<HTMLInputElement>('centerline'),
   showPhoto: $<HTMLInputElement>('show-photo'),
   fill: [...document.querySelectorAll<HTMLInputElement>('input[name="fill"]')],
+  format: [...document.querySelectorAll<HTMLInputElement>('input[name="format"]')],
 };
 
 interface Session {
@@ -173,11 +177,70 @@ $('threshold-auto').addEventListener('click', () => {
   retrace();
 });
 
-$('download').addEventListener('click', () => {
-  if (!session?.traced) return;
-  const svg = exportSvg(session.traced.shapes, session.traced.polygons, 2, isFilled());
-  const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
-  void download(new Blob([svg], { type: 'image/svg+xml' }), `shapescraft-${stamp}.svg`);
+const savedFormat = localStorageGet('format');
+for (const radio of controls.format) {
+  radio.checked = radio.value === (FORMATS.includes(savedFormat as Format) ? savedFormat : 'svg');
+  radio.addEventListener('change', () => {
+    localStorageSet('format', radio.value);
+    updateOutputs();
+  });
+}
+
+function format(): Format {
+  return (controls.format.find((r) => r.checked)?.value ?? 'svg') as Format;
+}
+
+/** The traced vector in the chosen format. */
+async function exportFile(): Promise<File | null> {
+  if (!session?.traced) return null;
+  const { shapes, polygons } = session.traced;
+  const f = format();
+  let data: BlobPart;
+  if (f === 'svg') data = exportSvg(shapes, polygons, PADDING_MM, isFilled());
+  else if (f === 'dxf') data = exportDxf(shapes, polygons, PADDING_MM);
+  else if (f === 'pdf') data = exportPdf(shapes, polygons, PADDING_MM, isFilled()) as BlobPart;
+  else data = (await renderPng(shapes, polygons)) as BlobPart;
+  return new File([data], exportName(f), { type: MIME[f] });
+}
+
+/** Draws the shapes on a white canvas at real size and records the dpi in the PNG. */
+async function renderPng(shapes: Traced['shapes'], polygons: Traced['polygons']): Promise<Uint8Array> {
+  const { origin, w, h } = exportArea(polygons, PADDING_MM);
+  const dpi = pngDpi(w, h);
+  const scale = dpi / 25.4;
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(w * scale));
+  canvas.height = Math.max(1, Math.round(h * scale));
+  const ctx = canvas.getContext('2d')!;
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.scale(scale, scale);
+  ctx.fillStyle = ctx.strokeStyle = '#000';
+  ctx.lineWidth = 0.2;
+  ctx.lineJoin = ctx.lineCap = 'round';
+  const filled = isFilled();
+  const solid = new Path2D(shapes.filter((s) => filled && s.closed).map((s) => pathData(s, origin)).join(' '));
+  ctx.fill(solid, 'evenodd');
+  for (const s of shapes) if (!(filled && s.closed)) ctx.stroke(new Path2D(pathData(s, origin)));
+  const blob = await new Promise<Blob>((res, rej) => canvas.toBlob((b) => (b ? res(b) : rej(new Error('PNG'))), 'image/png'));
+  return pngWithDpi(new Uint8Array(await blob.arrayBuffer()), dpi);
+}
+
+$('download').addEventListener('click', async () => {
+  const file = await exportFile();
+  if (file) await download(file, file.name);
+});
+// Sharing sends the file straight to Drive, Dropbox, mail or chat apps from a phone.
+const shareResult = $<HTMLButtonElement>('share');
+shareResult.hidden = !navigator.canShare?.({ files: [new File(['<svg/>'], 'test.svg', { type: MIME.svg })] });
+shareResult.addEventListener('click', async () => {
+  const file = await exportFile();
+  if (!file) return;
+  try {
+    await navigator.share({ files: [file], title: 'ShapesCraft' });
+  } catch (err) {
+    if ((err as Error).name !== 'AbortError') await download(file, file.name);
+  }
 });
 
 updateOutputs();
@@ -273,6 +336,16 @@ function updateOutputs() {
   $<HTMLOutputElement>('threshold-out').value = Number(controls.threshold.value || 0).toFixed(2);
   $<HTMLOutputElement>('tolerance-out').value = `${controls.tolerance.value} mm`;
   $<HTMLOutputElement>('minarea-out').value = `${controls.minarea.value} mm²`;
+  const f = format();
+  const name = f.toUpperCase();
+  $('download').textContent = t('download', { format: name });
+  $('share').textContent = t('share', { format: name });
+  let dpi = 300;
+  if (f === 'png' && session?.traced?.polygons.length) {
+    const { w, h } = exportArea(session.traced.polygons, PADDING_MM);
+    dpi = pngDpi(w, h);
+  }
+  $('format-hint').textContent = t(`format.${f}`, { dpi });
   $<HTMLOutputElement>('smooth-out').value = Number(controls.smooth.value) ? `${controls.smooth.value} mm` : t('smooth.off');
 }
 
