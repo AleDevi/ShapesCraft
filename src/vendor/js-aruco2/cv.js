@@ -1,4 +1,4 @@
-/*
+/*! @license
 Copyright (c) 2011 Juan Mellado
 
 Permission is hereby granted, free of charge, to any person obtaining a copy

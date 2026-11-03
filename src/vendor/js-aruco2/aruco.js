@@ -1,4 +1,4 @@
-/*
+/*! @license
 Copyright (c) 2020 Damiano Falcioni
 Copyright (c) 2011 Juan Mellado
 

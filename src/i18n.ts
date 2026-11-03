@@ -68,7 +68,7 @@ const en = {
   'summary.lines': 'lines',
   'sheet.scale': 'print at 100%: the line = 100 mm',
   'sheet.glue1': 'Glue to card or thin plastic,',
-  'footer.license': 'ShapesCraft is free software (AGPL-3.0)',
+  'footer.license': 'ShapesCraft is open source (Apache-2.0)',
   'footer.source': 'Source code',
   'sheet.glue2': 'then cut along the black lines (outer edge and window)',
 };
@@ -143,7 +143,7 @@ const it: Record<Key, string> = {
   'summary.lines': 'linee',
   'sheet.scale': 'stampa al 100%: la linea = 100 mm',
   'sheet.glue1': 'Incolla su cartoncino o plastica sottile,',
-  'footer.license': 'ShapesCraft è software libero (AGPL-3.0)',
+  'footer.license': 'ShapesCraft è open source (Apache-2.0)',
   'footer.source': 'Codice sorgente',
   'sheet.glue2': 'poi ritaglia lungo le linee nere (bordo esterno e finestra)',
 };

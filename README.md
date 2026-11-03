@@ -56,6 +56,6 @@ To try it on a phone, run `npm run dev` and open the network address on the same
 
 ## License
 
-ShapesCraft is released under the [GNU AGPL-3.0](LICENSE) license (`AGPL-3.0-only`). Copyright © 2026 Alessandro Devigili.
+ShapesCraft is released under the [Apache License 2.0](LICENSE) (`Apache-2.0`): you can use, modify and redistribute it, also in commercial and closed-source products, as long as you keep the copyright notice, the license and the [`NOTICE`](NOTICE) file. Versions published before this change were released under AGPL-3.0. Copyright © 2026 Alessandro Devigili.
 
 The code in `src/vendor/js-aruco2/` keeps its original license (MIT, with parts derived from OpenCV under the BSD license): see [`src/vendor/js-aruco2/LICENSE.txt`](src/vendor/js-aruco2/LICENSE.txt).
