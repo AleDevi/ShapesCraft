@@ -23,6 +23,8 @@ export interface FrameLayout {
   band: number;
   /** White quiet zone between a marker and the band edges. */
   markerPad: number;
+  /** Paper the frame is printed on, when larger than the frame (it is then centred on it). */
+  paper?: { width: number; height: number };
 }
 
 export const DICTIONARY = 'ARUCO_MIP_36h12';
@@ -34,6 +36,8 @@ const WINDOW_INSET = 2;
 export const FRAMES: FrameLayout[] = [
   { id: 'a4', name: 'A4 (210 × 297 mm)', width: 210, height: 297, margin: 6, band: 26, markerPad: 4 },
   { id: 'a3', name: 'A3 (297 × 420 mm)', width: 297, height: 420, margin: 7, band: 34, markerPad: 4 },
+  // Small objects fill more of the photo, so each millimetre gets more pixels: a sharper outline.
+  { id: 'mini', name: 'Mini 10 × 10 cm (A4)', width: 152, height: 152, margin: 6, band: 20, markerPad: 3, paper: { width: 210, height: 297 } },
 ];
 
 export function frameById(id: string): FrameLayout {
@@ -118,7 +122,9 @@ export type FrameOp =
   | { kind: 'line'; x1: number; y1: number; x2: number; y2: number; width: number }
   | { kind: 'outline'; rect: Rect; width: number }
   /** Text centred on x, with y on the baseline. */
-  | { kind: 'text'; x: number; y: number; size: number; body: string };
+  | { kind: 'text'; x: number; y: number; size: number; body: string }
+  /** A filled polygon, for shapes that are not axis-aligned rectangles. */
+  | { kind: 'poly'; points: Point[]; gray: number };
 
 /** The printable frame as drawing primitives, shared by the SVG and PDF output. */
 export function frameDrawing(f: FrameLayout, lang: Lang = 'en'): FrameOp[] {
@@ -182,6 +188,8 @@ export function frameSvg(f: FrameLayout, lang: Lang = 'en'): string {
         return `<line x1="${op.x1}" y1="${op.y1}" x2="${op.x2}" y2="${op.y2}" stroke="#000" stroke-width="${op.width}"/>`;
       case 'outline':
         return `<rect x="${op.rect.x}" y="${op.rect.y}" width="${op.rect.w}" height="${op.rect.h}" fill="none" stroke="#000" stroke-width="${op.width}"/>`;
+      case 'poly':
+        return `<path d="M${op.points.map((p) => `${p.x} ${p.y}`).join('L')}Z" fill="${hex(op.gray)}"/>`;
       case 'text':
         return `<text x="${op.x}" y="${op.y}" font-family="Helvetica, Arial, sans-serif" font-size="${op.size}" text-anchor="middle">${escape(op.body)}</text>`;
     }

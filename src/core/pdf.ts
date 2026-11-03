@@ -44,13 +44,19 @@ const n = (v: number) => String(Math.round(v * 1000) / 1000);
  * 100% more reliably than SVGs and can be shared from a phone to any printer.
  */
 export function framePdf(f: FrameLayout, lang: Lang = 'en'): Uint8Array {
-  return drawingPdf(frameDrawing(f, lang), f.width, f.height);
+  const paper = f.paper ?? { width: f.width, height: f.height };
+  const offset = { x: (paper.width - f.width) / 2, y: (paper.height - f.height) / 2 };
+  return drawingPdf(frameDrawing(f, lang), paper.width, paper.height, offset);
 }
 
-/** Any printable drawing as a one-page vector PDF, with a page of `width` × `height` mm. */
-export function drawingPdf(ops: FrameOp[], width: number, height: number): Uint8Array {
+/**
+ * Any printable drawing as a one-page vector PDF, with a page of `width` × `height` mm.
+ * `offset` shifts the drawing on the page, to centre a small drawing on a standard sheet.
+ */
+export function drawingPdf(ops: FrameOp[], width: number, height: number, offset = { x: 0, y: 0 }): Uint8Array {
   // Draw in millimetres with the origin at the top-left, like the SVG.
   const content: string[] = [pdfMmTransform(height)];
+  if (offset.x || offset.y) content.push(`1 0 0 1 ${n(offset.x)} ${n(offset.y)} cm`);
   for (const op of ops) {
     switch (op.kind) {
       case 'fill':
@@ -63,6 +69,9 @@ export function drawingPdf(ops: FrameOp[], width: number, height: number): Uint8
         break;
       case 'outline':
         content.push(`0 G ${n(op.width)} w ${n(op.rect.x)} ${n(op.rect.y)} ${n(op.rect.w)} ${n(op.rect.h)} re S`);
+        break;
+      case 'poly':
+        content.push(`${n(op.gray)} g ${op.points.map((p, i) => `${n(p.x)} ${n(p.y)} ${i ? 'l' : 'm'}`).join(' ')} h f`);
         break;
       case 'text': {
         const x = op.x - textWidth(op.body, op.size) / 2;

@@ -1,13 +1,21 @@
 import { drawingPdf } from '../core/pdf';
 import type { Lang } from '../i18n';
 import { translator3d } from './i18n';
-import { MAT, matDrawing } from './mat';
+import { matById, matDrawing, type MatId } from './mat';
 
-export function matPdf(lang: Lang): Uint8Array {
+export function matPdf(id: MatId, lang: Lang): Uint8Array {
   const t = translator3d(lang);
-  return drawingPdf(matDrawing({ title: t('pdf.title'), scale: t('pdf.scale'), place: t('pdf.place') }), MAT.width, MAT.height);
+  const mat = matById(id);
+  const labels = {
+    title: t(id === 'round' ? 'pdf.title.round' : 'pdf.title'),
+    scale: t('pdf.scale'),
+    place: t('pdf.place'),
+    cut: t('pdf.cut'),
+  };
+  return drawingPdf(matDrawing(mat, labels), mat.width, mat.height);
 }
 
-export function matPdfName(lang: Lang): string {
-  return `${lang === 'it' ? 'tappetino' : 'mat'}-3d-shapescraft-a4.pdf`;
+export function matPdfName(id: MatId, lang: Lang): string {
+  const shape = id === 'round' ? (lang === 'it' ? 'tondo-' : 'round-') : '';
+  return `${lang === 'it' ? 'tappetino' : 'mat'}-3d-${shape}shapescraft-a4.pdf`;
 }

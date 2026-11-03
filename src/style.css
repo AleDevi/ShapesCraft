@@ -213,3 +213,5 @@ button.link {
 
 .new-3d { text-align: center; margin: 14px 0 0; }
 .new-3d a { color: var(--accent); font-weight: 500; text-decoration: none; }
+
+h1 .logo { width: 1.25em; height: 1.25em; vertical-align: -0.22em; margin-right: 0.4em; border-radius: 22%; }

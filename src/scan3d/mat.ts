@@ -1,25 +1,36 @@
-import { markerCells, type FrameOp, type Rect } from '../core/frame';
+import { markerCells, type FrameOp } from '../core/frame';
 import type { Point } from '../core/homography';
 
 /**
- * The 3D base mat: an A4 sheet lying flat on the table, with a ring of ArUco
- * markers along its edge and an empty area in the middle for the object. With
- * 30 markers, enough of them stay visible from any side even when the object
- * hides a few. Ids start at 10 so the mat is never mistaken for the 2D frame
- * (ids 0..3). All measures in millimetres, origin at the sheet's top-left.
+ * The 3D base mats, printed on A4 and laid flat on the table, with the object in
+ * the middle and ArUco markers all around it, so enough of them stay visible from
+ * any side even when the object hides a few. Each mat has its own marker ids, so
+ * the app recognises which one is in the video, and none uses the 2D frame's ids
+ * (0..3). All measures in millimetres, origin at the sheet's top-left corner.
+ *
+ * - `rect`: 30 markers along the edge of the sheet.
+ * - `round`: 20 markers on a circle, the same from every side. It can be cut out and
+ *   put on a turntable: the phone then stays still and the object turns.
  */
-export const MAT = {
-  id: 'a4',
-  width: 210,
-  height: 297,
-  margin: 8,
-  marker: 20,
-  perRow: 7,
-  perColumn: 10,
-  firstId: 10,
-} as const;
+export type MatId = 'rect' | 'round';
 
 export interface MatMarker { id: number; corners: Point[] }
+
+export interface MatLayout {
+  id: MatId;
+  /** Printed sheet. */
+  width: number;
+  height: number;
+  /** Centre of the object area, where the object goes and the cameras look. */
+  center: Point;
+  markers: MatMarker[];
+  /** Outline of the mat (the sheet, or the circle to cut out). */
+  outline: Point[];
+  /** Outline of the area for the object. */
+  area: Point[];
+}
+
+const A4 = { width: 210, height: 297 };
 
 /** Evenly spaced positions of `count` squares of `size` between `from` and `to`. */
 function spread(from: number, to: number, count: number, size: number): number[] {
@@ -27,73 +38,137 @@ function spread(from: number, to: number, count: number, size: number): number[]
   return Array.from({ length: count }, (_, i) => from + i * (size + gap));
 }
 
-/** Every marker of the mat with its corners, clockwise from the top-left of the sheet. */
-export function matMarkers(): MatMarker[] {
-  const { width, height, margin, marker: s, perRow, perColumn, firstId } = MAT;
-  const xs = spread(margin, width - margin, perRow, s);
-  const ys = spread(margin, height - margin, perColumn, s);
+function rectangle(x: number, y: number, w: number, h: number): Point[] {
+  return [{ x, y }, { x: x + w, y }, { x: x + w, y: y + h }, { x, y: y + h }];
+}
+
+function circle(c: Point, r: number, segments = 96): Point[] {
+  return Array.from({ length: segments }, (_, i) => {
+    const a = (i / segments) * 2 * Math.PI;
+    return { x: c.x + r * Math.cos(a), y: c.y + r * Math.sin(a) };
+  });
+}
+
+function rectMat(): MatLayout {
+  const margin = 8;
+  const s = 20;
+  const xs = spread(margin, A4.width - margin, 7, s);
+  const ys = spread(margin, A4.height - margin, 10, s);
   const origins: Point[] = [
     ...xs.map((x) => ({ x, y: ys[0] })),
     ...ys.slice(1, -1).map((y) => ({ x: xs[xs.length - 1], y })),
     ...[...xs].reverse().map((x) => ({ x, y: ys[ys.length - 1] })),
     ...[...ys.slice(1, -1)].reverse().map((y) => ({ x: xs[0], y })),
   ];
-  return origins.map(({ x, y }, i) => ({
-    id: firstId + i,
-    corners: [
-      { x, y },
-      { x: x + s, y },
-      { x: x + s, y: y + s },
-      { x, y: y + s },
-    ],
-  }));
+  const inset = margin + s + 6;
+  return {
+    id: 'rect',
+    ...A4,
+    center: { x: A4.width / 2, y: A4.height / 2 },
+    markers: origins.map(({ x, y }, i) => ({ id: 10 + i, corners: rectangle(x, y, s, s) })),
+    outline: rectangle(0, 0, A4.width, A4.height),
+    area: rectangle(inset, inset, A4.width - 2 * inset, A4.height - 2 * inset),
+  };
 }
 
-/** Where the object goes: inside the ring of markers, with a little clearance. */
-export function objectArea(): Rect {
-  const inset = MAT.margin + MAT.marker + 6;
-  return { x: inset, y: inset, w: MAT.width - 2 * inset, h: MAT.height - 2 * inset };
+/** Radius of the round mat's cut line, of the ring of marker centres, and of the object area. */
+export const ROUND = { center: { x: 105, y: 135 }, cut: 98, ring: 82, area: 60, marker: 18, count: 20 } as const;
+
+function roundMat(): MatLayout {
+  const { center: c, ring, marker: s, count } = ROUND;
+  const markers = Array.from({ length: count }, (_, i) => {
+    // Clockwise from the top; each marker upright when seen from outside the circle.
+    const phi = -Math.PI / 2 + (i / count) * 2 * Math.PI;
+    const u = { x: Math.cos(phi), y: Math.sin(phi) };
+    const ey = { x: -u.x, y: -u.y };
+    const ex = { x: ey.y, y: -ey.x };
+    const p = { x: c.x + ring * u.x, y: c.y + ring * u.y };
+    const o = { x: p.x - (s / 2) * (ex.x + ey.x), y: p.y - (s / 2) * (ex.y + ey.y) };
+    const at = (a: number, b: number) => ({ x: o.x + a * ex.x + b * ey.x, y: o.y + a * ex.y + b * ey.y });
+    return { id: 40 + i, corners: [at(0, 0), at(s, 0), at(s, s), at(0, s)] };
+  });
+  return {
+    id: 'round',
+    ...A4,
+    center: c,
+    markers,
+    outline: circle(c, ROUND.cut),
+    area: circle(c, ROUND.area),
+  };
 }
 
-export function matCenter(): Point {
-  return { x: MAT.width / 2, y: MAT.height / 2 };
+export const MATS: MatLayout[] = [rectMat(), roundMat()];
+
+export function matById(id: MatId): MatLayout {
+  return MATS.find((m) => m.id === id)!;
 }
+
+/** The mat a marker id belongs to, if any. */
+export function matOfMarker(id: number): MatId | null {
+  return MATS.find((m) => m.markers.some((k) => k.id === id))?.id ?? null;
+}
+
+/** Point at fractions (a, b) of a marker square, from its first corner along its two sides. */
+export function markerPoint(corners: Point[], a: number, b: number): Point {
+  const [c0, c1, , c3] = corners;
+  return { x: c0.x + a * (c1.x - c0.x) + b * (c3.x - c0.x), y: c0.y + a * (c1.y - c0.y) + b * (c3.y - c0.y) };
+}
+
+function outlineOps(points: Point[], width: number): FrameOp[] {
+  return points.map((p, i) => {
+    const q = points[(i + 1) % points.length];
+    return { kind: 'line', x1: p.x, y1: p.y, x2: q.x, y2: q.y, width };
+  });
+}
+
+export interface MatLabels { title: string; scale: string; place: string; cut?: string }
 
 /** The printable mat as drawing primitives, for the PDF. */
-export function matDrawing(labels: { title: string; scale: string; place: string }): FrameOp[] {
+export function matDrawing(mat: MatLayout, labels: MatLabels): FrameOp[] {
   const ops: FrameOp[] = [];
-  const s = MAT.marker;
-  for (const m of matMarkers()) {
-    const { x, y } = m.corners[0];
+  for (const m of mat.markers) {
     const cells = markerCells(m.id);
-    const cell = s / cells.length;
-    ops.push({ kind: 'fill', rects: [{ x, y, w: s, h: s }], gray: 0 });
-    const white: Rect[] = [];
+    const n = cells.length;
+    ops.push({ kind: 'poly', points: m.corners, gray: 0 });
     cells.forEach((row, cy) =>
       row.forEach((v, cx) => {
-        if (v) white.push({ x: x + cx * cell, y: y + cy * cell, w: cell + 0.02, h: cell + 0.02 });
+        if (!v) return;
+        // Slight overlap avoids hairline seams between adjacent white cells.
+        const e = 0.02 / 20;
+        ops.push({
+          kind: 'poly',
+          gray: 1,
+          points: [
+            markerPoint(m.corners, cx / n, cy / n),
+            markerPoint(m.corners, (cx + 1) / n + e, cy / n),
+            markerPoint(m.corners, (cx + 1) / n + e, (cy + 1) / n + e),
+            markerPoint(m.corners, cx / n, (cy + 1) / n + e),
+          ],
+        });
       }),
     );
-    ops.push({ kind: 'fill', rects: white, gray: 1 });
   }
 
-  // Thin outline of the object area and a small cross at the centre.
-  const area = objectArea();
-  ops.push({ kind: 'outline', rect: area, width: 0.2 });
-  const c = matCenter();
+  // Object area, a small cross at the centre, and the cut line of the round mat.
+  ops.push(...outlineOps(mat.area, 0.2));
+  if (mat.id === 'round') ops.push(...outlineOps(mat.outline, 0.3));
+  const c = mat.center;
   ops.push({ kind: 'line', x1: c.x - 5, y1: c.y, x2: c.x + 5, y2: c.y, width: 0.2 });
   ops.push({ kind: 'line', x1: c.x, y1: c.y - 5, x2: c.x, y2: c.y + 5, width: 0.2 });
+  ops.push({ kind: 'text', x: c.x, y: c.y + 12, size: 2.8, body: labels.place });
 
-  // 100 mm ruler and labels along the bottom of the object area, to check the print scale.
-  const ry = area.y + area.h - 14;
-  const rx = c.x - 50;
+  // 100 mm ruler, to check the print scale: inside the area of the sheet mat, below the circle of the round one.
+  const areaBottom = Math.max(...mat.area.map((p) => p.y));
+  const ry = mat.id === 'rect' ? areaBottom - 14 : c.y + ROUND.cut + 20;
+  const rx = A4.width / 2 - 50;
   ops.push({ kind: 'line', x1: rx, y1: ry, x2: rx + 100, y2: ry, width: 0.3 });
   for (let i = 0; i <= 10; i++) {
     const len = i % 5 === 0 ? 3 : 1.5;
     ops.push({ kind: 'line', x1: rx + i * 10, y1: ry, x2: rx + i * 10, y2: ry + len, width: 0.3 });
   }
-  ops.push({ kind: 'text', x: c.x, y: ry + 8, size: 3, body: labels.scale });
-  ops.push({ kind: 'text', x: c.x, y: area.y + 8, size: 3.2, body: labels.title });
-  ops.push({ kind: 'text', x: c.x, y: c.y + 12, size: 2.8, body: labels.place });
+  ops.push({ kind: 'text', x: A4.width / 2, y: ry + 8, size: 3, body: labels.scale });
+  const titleY = mat.id === 'rect' ? Math.min(...mat.area.map((p) => p.y)) + 8 : c.y - ROUND.cut - 10;
+  ops.push({ kind: 'text', x: A4.width / 2, y: titleY, size: 3.2, body: labels.title });
+  if (mat.id === 'round' && labels.cut) ops.push({ kind: 'text', x: A4.width / 2, y: ry + 15, size: 2.8, body: labels.cut });
   return ops;
 }

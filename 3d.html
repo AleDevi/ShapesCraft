@@ -5,14 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="referrer" content="strict-origin-when-cross-origin" />
     <meta name="theme-color" content="#1f6feb" />
-    <link rel="icon" href="./icon.svg" type="image/svg+xml" />
+    <link rel="icon" href="./favicon.png" type="image/png" />
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
     <link rel="manifest" href="./manifest.webmanifest" />
     <title>ShapesCraft 3D</title>
   </head>
   <body>
     <header>
       <div class="title-row">
-        <h1>ShapesCraft 3D</h1>
+        <h1><img src="./favicon.png" alt="" class="logo" width="32" height="32" />ShapesCraft 3D</h1>
         <div class="title-tools">
           <a id="back" href="./index.html" class="link" data-i18n="nav.back"></a>
           <select id="lang" aria-label="Language">
@@ -27,11 +28,18 @@
     <main>
       <section class="card">
         <h2><span class="step">1</span> <span data-i18n="mat.title"></span></h2>
+        <div class="segmented mat-choice" role="radiogroup" aria-label="Mat">
+          <div>
+            <label><input type="radio" name="mat" value="rect" checked /> <span data-i18n="mat.rect"></span></label>
+            <label><input type="radio" name="mat" value="round" /> <span data-i18n="mat.round"></span></label>
+          </div>
+        </div>
         <div class="buttons">
           <button id="share-mat" type="button" data-i18n="mat.share" hidden></button>
           <button id="download-mat" type="button" class="secondary" data-i18n="mat.download"></button>
         </div>
         <p class="hint" data-i18n="mat.hint"></p>
+        <p id="round-hint" class="hint" data-i18n="mat.round.hint" hidden></p>
       </section>
 
       <section class="card">

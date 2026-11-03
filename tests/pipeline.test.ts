@@ -235,3 +235,29 @@ describe('single-line (centreline) tracing', () => {
     expect(exportSvg(out.shapes, out.polygons)).not.toMatch(/Z"\/>[\s\S]*Z"\/>/);
   });
 });
+
+describe('mini frame', () => {
+  it('prints centred on an A4 page at real size', () => {
+    const pdf = new TextDecoder().decode(framePdf(frameById('mini')));
+    expect(pdf).toContain('/MediaBox [0 0 595.276 841.89]');
+    expect(pdf).toContain('1 0 0 1 29 72.5 cm');
+  });
+
+  it('traces a small shape inside its 10 cm window', { timeout: 60000 }, () => {
+    // A 30 mm circle in the middle of the 100 mm window (the frame is 152 mm across).
+    const circle = { x: 76, y: 76, r: 15 };
+    const { photo } = renderPhoto('mini', (x, y) => Math.hypot(x - circle.x, y - circle.y) <= circle.r, { width: 1800, height: 1800 }, [
+      { x: 200, y: 180 }, { x: 1620, y: 220 }, { x: 1600, y: 1640 }, { x: 170, y: 1600 },
+    ]);
+    const frame = frameById('mini');
+    const det = detectFrame(photo, frame);
+    expect(det.markerIds).toEqual([0, 1, 2, 3]);
+    const rect = rectify(photo, frame, det, 8);
+    const prep = prepare(rect);
+    const out = trace(prep, rect, { ...DEFAULT_TRACE, threshold: prep.autoThreshold });
+    expect(out.polygons.length).toBe(1);
+    const radii = out.polygons[0].map((p) => Math.hypot(p.x - circle.x, p.y - circle.y));
+    const meanR = radii.reduce((s, d) => s + d, 0) / radii.length;
+    expect(Math.abs(meanR - circle.r)).toBeLessThan(0.2);
+  });
+});

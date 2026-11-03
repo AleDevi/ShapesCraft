@@ -50,3 +50,30 @@ describe('wrong sheet', () => {
     expect((error as MatNotFoundError).frame2d).toBe(true);
   });
 });
+
+describe('round mat', () => {
+  const W = 1600;
+  const H = 1200;
+  const focal = 0.75;
+  // A turntable: the phone stays put and the mat turns, which for the maths is the camera circling.
+  const c = { x: 105, y: 135 };
+  const cams: Vec3[] = [0, 1, 2, 3].map((k) => {
+    const a = (k / 4) * 2 * Math.PI + 0.3;
+    return [c.x + 380 * Math.sin(a), c.y + 380 * Math.cos(a), k % 2 ? -260 : -400];
+  });
+  const photos = cams.map((p) => shoot(p, focal * W, W, H, 'round'));
+
+  it('is recognised as the round mat and gives every camera position within 3 mm', () => {
+    const dets = photos.map(detectMat);
+    for (const d of dets) {
+      expect(d.matId).toBe('round');
+      expect(d.markerIds.length).toBeGreaterThanOrEqual(12);
+    }
+    const session = solveSession(dets);
+    expect(Math.abs(session.focal - focal) / focal).toBeLessThan(0.02);
+    session.photos.forEach((p, i) => {
+      const got = cameraCenter(p.pose);
+      expect(Math.hypot(got[0] - cams[i][0], got[1] - cams[i][1], got[2] - cams[i][2])).toBeLessThan(3);
+    });
+  });
+});
