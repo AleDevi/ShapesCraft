@@ -1,0 +1,30 @@
+header .lead { color: var(--muted); margin: 8px 0 4px; }
+a.link { color: var(--accent); text-decoration: none; font-weight: 500; }
+
+/* Colours of the pose quality, shared by the canvases (read through getComputedStyle). */
+:root { --good: #2e7d32; --fair: #ef8f00; --poor: #c62828; }
+
+.scene {
+  display: block;
+  width: 100%;
+  height: min(70vw, 420px);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  touch-action: none;
+  cursor: grab;
+}
+.coverage { display: block; width: min(100%, 280px); aspect-ratio: 1; margin: 16px auto 0; }
+.verdict { font-weight: 600; margin: 0 0 4px; }
+.verdict.good { color: var(--good); }
+.verdict.fair { color: var(--fair); }
+.verdict.poor { color: var(--poor); }
+.errors { margin: 8px 0 0; padding-left: 1.2em; color: var(--error); font-size: 0.9rem; }
+.errors:empty { display: none; }
+
+.table-wrap { overflow-x: auto; margin-top: 12px; }
+.poses { border-collapse: collapse; width: 100%; font-size: 0.9rem; font-variant-numeric: tabular-nums; }
+.poses th, .poses td { padding: 6px 8px; text-align: right; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.poses th { color: var(--muted); font-weight: 500; }
+.poses td.q { width: 10px; padding: 0; }
+.poses td.q span { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }

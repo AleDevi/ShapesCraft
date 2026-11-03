@@ -39,7 +39,7 @@ function normaliser(pts: Point[]): Mat3 {
 }
 
 /** Solves the n×n system `a·x = b` in place with partial pivoting. */
-function solve(a: number[][], b: number[]): number[] {
+export function solve(a: number[][], b: number[]): number[] {
   const n = b.length;
   for (let col = 0; col < n; col++) {
     let pivot = col;
