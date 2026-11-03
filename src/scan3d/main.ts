@@ -1,11 +1,12 @@
 import '../style.css';
 import './scan3d.css';
+import { registerServiceWorker, setupInstall } from '../pwa';
 import { defaultLang, type Lang } from '../i18n';
 import { toGray } from '../core/image';
 import { translator3d, type Translate3d } from './i18n';
 import { matPdf, matPdfName } from './pdf';
 import { MatNotFoundError, detectMat, solveSession, type MatDetection, type SolvedSession } from './pose';
-import { matById, type MatId } from './mat';
+import { MATS, matById, type MatId } from './mat';
 import { FAIR_MM, GOOD_MM, SceneView, drawCoverage, quality, type Colors } from './view';
 import { sharpestFrames } from './video';
 
@@ -41,16 +42,17 @@ applyLang();
 const matRadios = [...document.querySelectorAll<HTMLInputElement>('input[name="mat"]')];
 const savedMat = storageGet('mat3d');
 for (const r of matRadios) {
-  r.checked = r.value === (savedMat === 'round' ? 'round' : 'rect');
+  r.checked = r.value === (MATS.some((m) => m.id === savedMat) ? savedMat : 'rect');
   r.addEventListener('change', () => {
     storageSet('mat3d', selectedMat());
-    $('round-hint').hidden = selectedMat() !== 'round';
+    $('round-hint').hidden = selectedMat() === 'rect';
   });
 }
-$('round-hint').hidden = selectedMat() !== 'round';
+$('round-hint').hidden = selectedMat() === 'rect';
 
 function selectedMat(): MatId {
-  return matRadios.find((r) => r.checked)?.value === 'round' ? 'round' : 'rect';
+  const v = matRadios.find((r) => r.checked)?.value;
+  return MATS.find((m) => m.id === v)?.id ?? 'rect';
 }
 
 function matFile(): File {
@@ -333,3 +335,6 @@ function storageSet(key: string, value: string) {
     // Private mode or blocked storage: the choice just isn't remembered.
   }
 }
+
+registerServiceWorker();
+setupInstall(document.getElementById('install') as HTMLButtonElement, document.getElementById('install-ios')!);
