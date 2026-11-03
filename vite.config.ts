@@ -1,6 +1,8 @@
+import { fileURLToPath } from 'node:url';
 import { defineConfig, type Plugin } from 'vite';
 import { FRAMES } from './src/core/frame';
 import { framePdf, framePdfName } from './src/core/pdf';
+import { matPdf, matPdfName } from './src/scan3d/pdf';
 
 /** Publishes every frame PDF next to the app, so a computer can open it by link. */
 function framePdfs(): Plugin {
@@ -12,6 +14,9 @@ function framePdfs(): Plugin {
         for (const lang of ['en', 'it'] as const) {
           this.emitFile({ type: 'asset', fileName: `frames/${framePdfName(frame, lang)}`, source: framePdf(frame, lang) });
         }
+      }
+      for (const lang of ['en', 'it'] as const) {
+        this.emitFile({ type: 'asset', fileName: `frames/${matPdfName(lang)}`, source: matPdf(lang) });
       }
     },
   };
@@ -46,4 +51,13 @@ function contentSecurityPolicy(): Plugin {
 export default defineConfig({
   base: './',
   plugins: [contentSecurityPolicy(), framePdfs()],
+  build: {
+    rollupOptions: {
+      // The 2D tracer and the 3D scan are two pages sharing the same code.
+      input: {
+        main: fileURLToPath(new URL('./index.html', import.meta.url)),
+        scan3d: fileURLToPath(new URL('./3d.html', import.meta.url)),
+      },
+    },
+  },
 });

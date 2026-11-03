@@ -210,3 +210,6 @@ button.link {
 .site-footer a {
   color: var(--accent);
 }
+
+.new-3d { text-align: center; margin: 14px 0 0; }
+.new-3d a { color: var(--accent); font-weight: 500; text-decoration: none; }

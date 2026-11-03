@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <meta name="theme-color" content="#1f6feb" />
+    <link rel="icon" href="./icon.svg" type="image/svg+xml" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <title>ShapesCraft 3D</title>
+  </head>
+  <body>
+    <header>
+      <div class="title-row">
+        <h1>ShapesCraft 3D</h1>
+        <div class="title-tools">
+          <a id="back" href="./index.html" class="link" data-i18n="nav.back"></a>
+          <select id="lang" aria-label="Language">
+            <option value="en">EN</option>
+            <option value="it">IT</option>
+          </select>
+        </div>
+      </div>
+      <p class="lead" data-i18n="lead"></p>
+    </header>
+
+    <main>
+      <section class="card">
+        <h2><span class="step">1</span> <span data-i18n="mat.title"></span></h2>
+        <div class="buttons">
+          <button id="share-mat" type="button" data-i18n="mat.share" hidden></button>
+          <button id="download-mat" type="button" class="secondary" data-i18n="mat.download"></button>
+        </div>
+        <p class="hint" data-i18n="mat.hint"></p>
+      </section>
+
+      <section class="card">
+        <h2><span class="step">2</span> <span data-i18n="photos.title"></span></h2>
+        <p class="hint" data-i18n="photos.hint"></p>
+        <div class="buttons">
+          <label class="button">
+            <span data-i18n="photos.take"></span>
+            <input id="camera" type="file" accept="image/*" capture="environment" hidden />
+          </label>
+          <label class="button secondary">
+            <span data-i18n="photos.upload"></span>
+            <input id="upload" type="file" accept="image/*" multiple hidden />
+          </label>
+        </div>
+        <p id="status" class="status" role="status"></p>
+        <ul id="errors" class="errors"></ul>
+      </section>
+
+      <section id="result" class="card" hidden>
+        <h2><span class="step">3</span> <span data-i18n="result.title"></span></h2>
+        <p id="verdict" class="verdict"></p>
+        <p id="summary" class="hint"></p>
+        <canvas id="scene" class="scene"></canvas>
+        <p class="hint" data-i18n="result.view"></p>
+        <canvas id="coverage" class="coverage"></canvas>
+        <p class="hint" data-i18n="result.coverage"></p>
+        <div class="table-wrap"><table id="table" class="poses"></table></div>
+        <div class="buttons">
+          <button id="json" type="button" class="secondary" data-i18n="result.json"></button>
+          <button id="clear" type="button" class="secondary" data-i18n="photos.clear"></button>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <span data-i18n="footer.license"></span> ·
+      <a href="https://github.com/AleDevi/ShapesCraft" target="_blank" rel="noopener" data-i18n="footer.source"></a>
+    </footer>
+
+    <script type="module" src="./src/scan3d/main.ts"></script>
+  </body>
+</html>

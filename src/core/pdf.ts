@@ -1,4 +1,4 @@
-import { frameDrawing, type FrameLayout } from './frame';
+import { frameDrawing, type FrameLayout, type FrameOp } from './frame';
 import type { Lang } from '../i18n';
 
 const PT_PER_MM = 72 / 25.4;
@@ -44,9 +44,14 @@ const n = (v: number) => String(Math.round(v * 1000) / 1000);
  * 100% more reliably than SVGs and can be shared from a phone to any printer.
  */
 export function framePdf(f: FrameLayout, lang: Lang = 'en'): Uint8Array {
+  return drawingPdf(frameDrawing(f, lang), f.width, f.height);
+}
+
+/** Any printable drawing as a one-page vector PDF, with a page of `width` × `height` mm. */
+export function drawingPdf(ops: FrameOp[], width: number, height: number): Uint8Array {
   // Draw in millimetres with the origin at the top-left, like the SVG.
-  const content: string[] = [pdfMmTransform(f.height)];
-  for (const op of frameDrawing(f, lang)) {
+  const content: string[] = [pdfMmTransform(height)];
+  for (const op of ops) {
     switch (op.kind) {
       case 'fill':
         content.push(`${n(op.gray)} g`);
@@ -67,7 +72,7 @@ export function framePdf(f: FrameLayout, lang: Lang = 'en'): Uint8Array {
       }
     }
   }
-  return pdfDocument(f.width, f.height, content.join('\n'), true);
+  return pdfDocument(width, height, content.join('\n'), true);
 }
 
 /**
