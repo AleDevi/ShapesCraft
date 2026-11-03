@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/icon.png" alt="ShapesCraft icon: an engraved hummingbird in flight" width="160"></p>
+
 # ShapesCraft
 
 **English** · [Italiano](README.it.md)
@@ -7,6 +9,10 @@
 No install, no sign-up: it runs in the browser on phone, tablet and computer.
 
 A web app (PWA) that turns a photo of a drawing or an object laid on a printed frame into a true-scale SVG vector, ready for a laser cutter, CNC or cutting plotter.
+
+## Why a hummingbird
+
+A hummingbird hovers around a flower with extreme precision, holding perfectly still in mid-air and moving around it a little at a time. That is what you do with your phone in ShapesCraft: you hold it steady over the frame to get a sharp photo and, for the 3D scan, you circle slowly around the object, like a hummingbird around its flower.
 
 The app is available in English and Italian: it follows the phone's language, and you can switch it from the menu at the top.
 

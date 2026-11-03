@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/icon.png" alt="Icona di ShapesCraft: un colibrì in volo, disegnato a incisione" width="160"></p>
+
 # ShapesCraft
 
 [English](README.md) · **Italiano**
@@ -7,6 +9,10 @@
 Niente installazione né registrazione: funziona nel browser di telefono, tablet e computer.
 
 Web app (PWA) che trasforma la foto di un disegno o di un oggetto appoggiato su una cornice stampata in un vettoriale SVG in scala reale, pronto per laser, CNC o plotter da taglio.
+
+## Perché un colibrì
+
+Il colibrì vola intorno al fiore con estrema precisione: resta immobile a mezz'aria e gli gira intorno poco alla volta. È quello che si fa col telefono in ShapesCraft: lo si tiene fermo sopra la cornice per una foto nitida e, per la scansione 3D, si gira lentamente intorno all'oggetto, come il colibrì intorno al suo fiore.
 
 L'app è in italiano e in inglese: segue la lingua del telefono e si può cambiare dal menu in alto.
 
