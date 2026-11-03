@@ -337,4 +337,7 @@ function storageSet(key: string, value: string) {
 }
 
 registerServiceWorker();
-setupInstall(document.getElementById('install') as HTMLButtonElement, document.getElementById('install-ios')!);
+setupInstall(document.getElementById('install') as HTMLButtonElement, document.getElementById('install-help')!, (el, key) => {
+  el.dataset.i18n = key;
+  el.textContent = t(key);
+});
