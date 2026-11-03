@@ -33,6 +33,8 @@ const CSP = [
   "style-src 'self'",
   "img-src 'self' blob: data:",
   "connect-src 'self'",
+  // The 3D scan plays the chosen video from a blob: URL to read its frames.
+  "media-src 'self' blob:",
   "manifest-src 'self'",
   "base-uri 'none'",
   "form-action 'none'",

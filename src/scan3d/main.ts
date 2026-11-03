@@ -5,7 +5,12 @@ import { toGray } from '../core/image';
 import { translator3d, type Translate3d } from './i18n';
 import { matPdf, matPdfName } from './pdf';
 import { MatNotFoundError, detectMat, solveSession, type MatDetection, type SolvedSession } from './pose';
-import { SceneView, drawCoverage, quality, type Colors } from './view';
+import { FAIR_MM, GOOD_MM, SceneView, drawCoverage, quality, type Colors } from './view';
+import { sharpestFrames } from './video';
+
+/** Frames taken from a video: one per window, the sharpest of a few candidates. */
+const VIDEO_FRAMES = 40;
+const VIDEO_CANDIDATES = 3;
 
 /** Photos are downscaled to this longest side to keep memory in check on phones. */
 const MAX_PHOTO_SIDE = 4000;
@@ -51,13 +56,66 @@ $('download-mat').addEventListener('click', () => {
   void download(file, file.name);
 });
 
-for (const id of ['camera', 'upload']) {
+const upload = $<HTMLInputElement>('upload');
+upload.addEventListener('change', () => {
+  const files = [...(upload.files ?? [])];
+  upload.value = '';
+  if (files.length) void addPhotos(files);
+});
+for (const id of ['video-camera', 'video-upload']) {
   const input = $<HTMLInputElement>(id);
   input.addEventListener('change', () => {
-    const files = [...(input.files ?? [])];
+    const file = input.files?.[0];
     input.value = '';
-    if (files.length) void addPhotos(files);
+    if (file) void readVideo(file);
   });
+}
+
+let busy = false;
+function setBusy(on: boolean) {
+  busy = on;
+  for (const id of ['video-camera', 'video-upload', 'upload']) $<HTMLInputElement>(id).disabled = on;
+  $('progress').hidden = !on;
+}
+
+/** A video is a whole scan: it replaces what was there. */
+async function readVideo(file: File) {
+  if (busy) return;
+  setBusy(true);
+  shots = [];
+  solved = null;
+  errors.length = 0;
+  render();
+  const progress = $<HTMLProgressElement>('progress');
+  let missing = 0;
+  let frame2d = false;
+  try {
+    setStatus(() => t('status.video', { pct: 0 }));
+    const total = await sharpestFrames(
+      file,
+      VIDEO_FRAMES,
+      VIDEO_CANDIDATES,
+      async ({ time, photo }) => {
+        try {
+          shots.push({ name: `${time.toFixed(1)} s`, det: detectMat(photo) });
+        } catch (err) {
+          missing++;
+          if (err instanceof MatNotFoundError && err.frame2d) frame2d = true;
+        }
+        await nextFrame();
+      },
+      (done) => {
+        progress.value = done;
+        setStatus(() => t('status.video', { pct: Math.round(done * 100) }));
+      },
+    );
+    if (frame2d && shots.length < 4) errors.push(() => t('status.frame2d'));
+    if (missing) errors.push(() => t('status.videoFrames', { missing, total }));
+  } catch {
+    errors.push(() => t('status.videoFailed'));
+  }
+  await solveAndRender();
+  setBusy(false);
 }
 
 $('clear').addEventListener('click', () => {
@@ -95,6 +153,16 @@ window.addEventListener('resize', () => render());
 window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener?.('change', () => render());
 
 async function addPhotos(files: File[]) {
+  if (busy) return;
+  setBusy(true);
+  try {
+    await readPhotos(files);
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function readPhotos(files: File[]) {
   for (let i = 0; i < files.length; i++) {
     setStatus(() => t('status.reading', { n: i + 1, total: files.length }));
     await nextFrame();
@@ -114,9 +182,13 @@ async function addPhotos(files: File[]) {
       shots.push({ name, det: detectMat(toGray(ctx.getImageData(0, 0, w, h))) });
     } catch (err) {
       const found = err instanceof MatNotFoundError ? err.markersFound : 0;
-      errors.push(() => t('status.notFound', { name, found }));
+      errors.push(() => (err instanceof MatNotFoundError && err.frame2d ? `${name}: ${t('status.frame2d')}` : t('status.notFound', { name, found })));
     }
   }
+  await solveAndRender();
+}
+
+async function solveAndRender() {
   setStatus(() => t('status.solving'));
   await nextFrame();
   solved = shots.length ? solveSession(shots.map((s) => s.det)) : null;
@@ -133,7 +205,7 @@ function render() {
   const photos = solved.photos;
   const mean = (f: (p: (typeof photos)[number]) => number) => photos.reduce((s, p) => s + f(p), 0) / photos.length;
   const meanMm = mean((p) => p.meanMm);
-  const verdict = meanMm < 0.5 ? 'good' : meanMm < 1.2 ? 'fair' : 'poor';
+  const verdict = meanMm < GOOD_MM ? 'good' : meanMm < FAIR_MM ? 'fair' : 'poor';
   const v = $('verdict');
   v.className = `verdict ${verdict}`;
   v.textContent = t(`result.${verdict}`);
