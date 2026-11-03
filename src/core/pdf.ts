@@ -45,7 +45,7 @@ const n = (v: number) => String(Math.round(v * 1000) / 1000);
  */
 export function framePdf(f: FrameLayout, lang: Lang = 'en'): Uint8Array {
   // Draw in millimetres with the origin at the top-left, like the SVG.
-  const content: string[] = [`${n(PT_PER_MM)} 0 0 ${n(-PT_PER_MM)} 0 ${n(f.height * PT_PER_MM)} cm`];
+  const content: string[] = [pdfMmTransform(f.height)];
   for (const op of frameDrawing(f, lang)) {
     switch (op.kind) {
       case 'fill':
@@ -67,17 +67,24 @@ export function framePdf(f: FrameLayout, lang: Lang = 'en'): Uint8Array {
       }
     }
   }
-  const stream = content.join('\n');
-  const w = n(f.width * PT_PER_MM);
-  const h = n(f.height * PT_PER_MM);
+  return pdfDocument(f.width, f.height, content.join('\n'), true);
+}
+
+/**
+ * A one-page PDF of `widthMm` × `heightMm`. Everything in `stream` must be ASCII,
+ * so string offsets are byte offsets. `font` adds Helvetica as /F1.
+ */
+export function pdfDocument(widthMm: number, heightMm: number, stream: string, font = false): Uint8Array {
+  const w = n(widthMm * PT_PER_MM);
+  const h = n(heightMm * PT_PER_MM);
+  const resources = font ? '/Resources << /Font << /F1 5 0 R >> >> ' : '';
   const objects = [
     '<< /Type /Catalog /Pages 2 0 R >>',
     '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
-    `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${w} ${h}] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>`,
+    `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${w} ${h}] ${resources}/Contents 4 0 R >>`,
     `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`,
-    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>',
   ];
-  // Everything above is ASCII, so string offsets are byte offsets.
+  if (font) objects.push('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>');
   let pdf = '%PDF-1.4\n';
   const offsets: number[] = [];
   objects.forEach((body, i) => {
@@ -89,6 +96,11 @@ export function framePdf(f: FrameLayout, lang: Lang = 'en'): Uint8Array {
   for (const o of offsets) pdf += `${String(o).padStart(10, '0')} 00000 n \n`;
   pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
   return new TextEncoder().encode(pdf);
+}
+
+/** Millimetres to points, flipping y so drawing commands use the SVG's top-left origin. */
+export function pdfMmTransform(heightMm: number): string {
+  return `${n(PT_PER_MM)} 0 0 ${n(-PT_PER_MM)} 0 ${n(heightMm * PT_PER_MM)} cm`;
 }
 
 /** File name of the frame PDF, in the language of its text. */

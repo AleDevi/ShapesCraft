@@ -24,6 +24,17 @@ export function boundingBox(polygons: Point[][]) {
   return { minX, minY, maxX, maxY };
 }
 
+/** The area every export covers: the traced shapes plus `padding` mm on each side. */
+export function exportArea(polygons: Point[][], padding: number) {
+  const box = boundingBox(polygons);
+  if (!polygons.length) return { origin: { x: 0, y: 0 }, w: 10, h: 10 };
+  return {
+    origin: { x: box.minX - padding, y: box.minY - padding },
+    w: box.maxX - box.minX + 2 * padding,
+    h: box.maxY - box.minY + 2 * padding,
+  };
+}
+
 /**
  * SVG in real millimetres, cropped to the traced shapes plus `padding`.
  * Outlines are hairline strokes with no fill, the form laser and CNC software expects.
@@ -31,11 +42,8 @@ export function boundingBox(polygons: Point[][]) {
  * keeps holes open; open lines stay strokes, since they have no inside.
  */
 export function exportSvg(shapes: PathShape[], polygons: Point[][], padding = 2, filled = false): string {
-  const box = boundingBox(polygons);
   if (!polygons.length) return '<svg xmlns="http://www.w3.org/2000/svg" width="10mm" height="10mm" viewBox="0 0 10 10"/>';
-  const origin = { x: box.minX - padding, y: box.minY - padding };
-  const w = box.maxX - box.minX + 2 * padding;
-  const h = box.maxY - box.minY + 2 * padding;
+  const { origin, w, h } = exportArea(polygons, padding);
   const stroked = filled ? shapes.filter((s) => !s.closed) : shapes;
   const solid = filled ? shapes.filter((s) => s.closed) : [];
   const body: string[] = [];

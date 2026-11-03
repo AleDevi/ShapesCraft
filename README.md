@@ -16,7 +16,7 @@ The app is available in English and Italian: it follows the phone's language, an
 2. For a rigid frame, glue it to card or thin plastic and cut along the black lines (outer edge and central window). Or use the sheet as it is and draw inside the window.
 3. Lay the frame over the drawing (dark marker on white paper) or the object, which must sit inside the window.
 4. Take the photo with the whole frame in view. The app finds the markers, corrects the perspective and traces the outlines.
-5. Adjust threshold, straightening and smoothing, then download the SVG (units in millimetres).
+5. Adjust threshold, straightening and smoothing, then pick the format and download or share the file: SVG, DXF (R12), PDF at real size or PNG at 300 dpi, all in millimetres.
 
 ## How it works
 
@@ -27,6 +27,7 @@ The app is available in English and Italian: it follows the phone's language, an
 - **Single line**: Zhang–Suen thinning of the ink, skeleton split into branches between ends and junctions, spurious branches removed, ends extended by half a stroke; the open paths are exported as unclosed lines in the SVG.
 
 - **Frame PDF**: a small built-in writer turns the same drawing as the SVG frame into a vector PDF (Helvetica, WinAnsi). The build also publishes every frame under `frames/`, so a computer can open it by link.
+- **Exports**: SVG and PDF keep the Bézier curves; DXF R12 (one polyline per shape, curves split into pieces within 0.02 mm, y pointing up) for CAD and CNC; PNG drawn on a canvas with its dpi written in a `pHYs` chunk so it opens at real size.
 
 Everything runs in the browser, no server.
 
