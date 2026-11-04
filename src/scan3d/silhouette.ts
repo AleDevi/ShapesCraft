@@ -152,7 +152,7 @@ function bin(r: number, g: number, b: number): number {
 }
 /** Colours the table shows this often and the object hardly ever are table. */
 const TABLE_SHARE = 0.004;
-const TABLE_OVER_OBJECT = 6;
+const TABLE_OVER_OBJECT = 3;
 
 interface Prepared { kind: Uint8Array; white: number[] | null }
 
