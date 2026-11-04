@@ -83,6 +83,25 @@
           <button id="clear" type="button" class="secondary" data-i18n="photos.clear"></button>
         </div>
       </section>
+
+      <section id="model" class="card" hidden>
+        <h2><span class="step">4</span> <span data-i18n="model.title"></span></h2>
+        <p class="hint" data-i18n="model.hint"></p>
+        <div class="buttons">
+          <button id="build-model" type="button" data-i18n="model.build"></button>
+        </div>
+        <progress id="progress-model" max="1" value="0" hidden></progress>
+        <p id="model-empty" class="errors-text" data-i18n="model.empty" hidden></p>
+        <div id="model-result" hidden>
+          <canvas id="model-view" class="scene"></canvas>
+          <p class="hint" data-i18n="model.view"></p>
+          <p id="model-size" class="model-size"></p>
+          <div class="buttons">
+            <button id="stl" type="button" data-i18n="model.stl"></button>
+          </div>
+          <p class="hint" data-i18n="model.limits"></p>
+        </div>
+      </section>
     </main>
 
     <footer class="site-footer">

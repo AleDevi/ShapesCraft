@@ -8,7 +8,11 @@ import { matPdf, matPdfName } from './pdf';
 import { MatNotFoundError, detectMat, solveSession, type MatDetection, type SolvedSession } from './pose';
 import { MATS, matById, type MatId } from './mat';
 import { FAIR_MM, GOOD_MM, SceneView, drawCoverage, quality, type Colors } from './view';
-import { sharpestFrames } from './video';
+import { colorCopy, sharpestFrames } from './video';
+import { carve, measure } from './carve';
+import { stl, surface, type Mesh } from './mesh';
+import { MeshView } from './meshview';
+import type { Rgba } from '../core/image';
 
 /** Frames taken from a video: one per window, the sharpest of a few candidates. */
 const VIDEO_FRAMES = 40;
@@ -19,9 +23,14 @@ const MAX_PHOTO_SIDE = 4000;
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
-interface Shot { name: string; det: MatDetection }
+interface Shot { name: string; det: MatDetection; color: Rgba }
 let shots: Shot[] = [];
 let solved: SolvedSession | null = null;
+let model: { mesh: Mesh; size: NonNullable<ReturnType<typeof measure>> } | null = null;
+let modelEmpty = false;
+
+/** Above this many triangles the preview uses a coarser copy of the model, to stay smooth on phones. */
+const PREVIEW_TRIANGLES = 40000;
 
 const langSelect = $<HTMLSelectElement>('lang');
 const savedLang = storageGet('lang');
@@ -37,6 +46,7 @@ langSelect.addEventListener('change', () => {
 });
 
 const scene = new SceneView($<HTMLCanvasElement>('scene'), colors);
+const modelView = new MeshView($<HTMLCanvasElement>('model-view'), () => ({ fill: colors().accent, edge: colors().border }));
 applyLang();
 
 const matRadios = [...document.querySelectorAll<HTMLInputElement>('input[name="mat"]')];
@@ -94,6 +104,7 @@ let busy = false;
 function setBusy(on: boolean) {
   busy = on;
   for (const id of ['video-camera', 'video-upload', 'upload']) $<HTMLInputElement>(id).disabled = on;
+  for (const id of ['build-model', 'clear']) $<HTMLButtonElement>(id).disabled = on;
   $('progress').hidden = !on;
 }
 
@@ -103,6 +114,7 @@ async function readVideo(file: File) {
   setBusy(true);
   shots = [];
   solved = null;
+  resetModel();
   errors.length = 0;
   render();
   const progress = $<HTMLProgressElement>('progress');
@@ -114,9 +126,9 @@ async function readVideo(file: File) {
       file,
       VIDEO_FRAMES,
       VIDEO_CANDIDATES,
-      async ({ time, photo }) => {
+      async ({ time, photo, color }) => {
         try {
-          shots.push({ name: `${time.toFixed(1)} s`, det: detectMat(photo) });
+          shots.push({ name: `${time.toFixed(1)} s`, det: detectMat(photo), color });
         } catch (err) {
           missing++;
           if (err instanceof MatNotFoundError && err.frame2d) frame2d = true;
@@ -140,6 +152,7 @@ async function readVideo(file: File) {
 $('clear').addEventListener('click', () => {
   shots = [];
   solved = null;
+  resetModel();
   errors.length = 0;
   setStatus(null);
   render();
@@ -167,6 +180,49 @@ $('json').addEventListener('click', () => {
   };
   void download(new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' }), 'shapescraft-3d-poses.json');
 });
+
+$('build-model').addEventListener('click', () => void buildModel());
+$('stl').addEventListener('click', () => {
+  if (model) void download(new Blob([stl(model.mesh)], { type: 'model/stl' }), 'shapescraft-3d.stl');
+});
+
+function resetModel() {
+  model = null;
+  modelEmpty = false;
+}
+
+async function buildModel() {
+  if (busy || !solved || !shots.length) return;
+  setBusy(true);
+  resetModel();
+  render();
+  const progress = $<HTMLProgressElement>('progress-model');
+  progress.hidden = false;
+  try {
+    const mat = matById(shots[0].det.matId);
+    const views = shots.map((s, i) => ({
+      image: s.color,
+      pose: solved!.photos[i].pose,
+      focal: solved!.focal * Math.max(s.color.width, s.color.height),
+    }));
+    const volume = await carve(mat, views, async (done) => {
+      progress.value = done;
+      setStatus(() => t('model.building', { pct: Math.round(done * 100) }));
+      await nextFrame();
+    });
+    const size = measure(volume);
+    if (size) {
+      const mesh = surface(volume, mat.center);
+      model = { mesh, size };
+      modelView.set(mesh.triangles.length / 3 > PREVIEW_TRIANGLES ? surface(volume, mat.center, 2) : mesh);
+    } else modelEmpty = true;
+    setStatus(null);
+  } finally {
+    progress.hidden = true;
+    setBusy(false);
+    render();
+  }
+}
 
 window.addEventListener('resize', () => render());
 window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener?.('change', () => render());
@@ -198,7 +254,7 @@ async function readPhotos(files: File[]) {
       const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
       ctx.drawImage(bitmap, 0, 0, w, h);
       bitmap.close();
-      shots.push({ name, det: detectMat(toGray(ctx.getImageData(0, 0, w, h))) });
+      shots.push({ name, det: detectMat(toGray(ctx.getImageData(0, 0, w, h))), color: colorCopy(canvas, w, h) });
     } catch (err) {
       const found = err instanceof MatNotFoundError ? err.markersFound : 0;
       errors.push(() => (err instanceof MatNotFoundError && err.frame2d ? `${name}: ${t('status.frame2d')}` : t('status.notFound', { name, found })));
@@ -208,6 +264,7 @@ async function readPhotos(files: File[]) {
 }
 
 async function solveAndRender() {
+  resetModel();
   setStatus(() => t('status.solving'));
   await nextFrame();
   // Only the mat seen in most views counts: a stray view of the other mat is left out.
@@ -225,7 +282,17 @@ function render() {
   list.replaceChildren(...errors.map((e) => Object.assign(document.createElement('li'), { textContent: e() })));
   const result = $('result');
   result.hidden = !solved;
+  $('model').hidden = !solved;
   if (!solved) return;
+  $('model-result').hidden = !model;
+  $('model-empty').hidden = !modelEmpty;
+  if (model) {
+    const s = model.size;
+    $('model-size').textContent = t('model.size', {
+      w: Math.round(s.width), d: Math.round(s.depth), h: Math.round(s.height), ml: Math.round(s.volumeMl),
+    });
+    modelView.draw();
+  }
   const photos = solved.photos;
   const mean = (f: (p: (typeof photos)[number]) => number) => photos.reduce((s, p) => s + f(p), 0) / photos.length;
   const meanMm = mean((p) => p.meanMm);
