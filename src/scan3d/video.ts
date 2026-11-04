@@ -1,9 +1,25 @@
-import { toGray, type Gray } from '../core/image';
+import { toGray, type Gray, type Rgba } from '../core/image';
 
 /** Longest side of the quick preview used to compare sharpness between nearby frames. */
 const SHARPNESS_SIDE = 480;
 
-export interface VideoFrame { time: number; photo: Gray }
+/** Longest side of the colour copy kept of each frame, for the 3D model. */
+export const COLOR_SIDE = 720;
+
+/** `photo`: full size, grey, to find the markers; `color`: a small colour copy, to find the object. */
+export interface VideoFrame { time: number; photo: Gray; color: Rgba }
+
+/** A small colour copy of an image or video frame. */
+export function colorCopy(source: CanvasImageSource, w: number, h: number): Rgba {
+  const k = Math.min(1, COLOR_SIDE / Math.max(w, h));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(w * k);
+  canvas.height = Math.round(h * k);
+  const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
+  ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
+  const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  return { width: img.width, height: img.height, data: img.data };
+}
 
 /**
  * Picks the sharpest frames of a video, evenly spread over its length: the video
@@ -64,7 +80,7 @@ export async function sharpestFrames(
       }
       await seek(video, best.time);
       fctx.drawImage(video, 0, 0, w, h);
-      await onFrame({ time: best.time, photo: toGray(fctx.getImageData(0, 0, w, h)) }, i);
+      await onFrame({ time: best.time, photo: toGray(fctx.getImageData(0, 0, w, h)), color: colorCopy(full, w, h) }, i);
       onProgress((i + 1) / windows);
     }
     return windows;

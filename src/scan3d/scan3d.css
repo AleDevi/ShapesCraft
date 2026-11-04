@@ -35,3 +35,6 @@ a.link { color: var(--accent); text-decoration: none; font-weight: 500; }
 .mat-choice { margin-bottom: 12px; }
 .mat-choice > div { grid-template-columns: 1fr 1fr; }
 .mat-choice label { min-height: 44px; text-align: center; padding: 0 6px; }
+#progress-model { width: 100%; margin-top: 12px; accent-color: var(--accent); }
+.model-size { font-weight: 600; margin: 8px 0 0; font-variant-numeric: tabular-nums; }
+.errors-text { color: var(--error); font-size: 0.9rem; margin: 8px 0 0; }
