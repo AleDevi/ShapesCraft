@@ -3,7 +3,9 @@ import type { Lang } from '../i18n';
 const en = {
   'nav.back': '← 2D',
   'install.button': 'Install the app',
-  'install.ios': 'On iPhone: tap Share, then "Add to Home Screen".',
+  'install.ios': 'On iPhone: open this page in Safari, tap Share, then "Add to Home Screen".',
+  'install.android': 'Open this page in Chrome (not inside another app), tap the ⋮ menu at the top right, then "Install app" or "Add to Home screen".',
+  'install.desktop': 'In Chrome or Edge, click the install icon at the right end of the address bar, or open the browser menu and choose "Install ShapesCraft".',
   lead: 'Early test of the 3D scan. This step only checks that the app can tell, from each photo, where the phone was. The 3D model comes next.',
   'mat.title': 'Print the 3D mat',
   'mat.hint': 'Print it at 100% on the paper size shown (A4 or A3). Lay it flat on the table, without folds. The bottom line must measure 100 mm.',
@@ -59,7 +61,9 @@ type Key = keyof typeof en;
 const it: Record<Key, string> = {
   'nav.back': '← 2D',
   'install.button': 'Installa l\'app',
-  'install.ios': 'Su iPhone: tocca Condividi e poi "Aggiungi alla schermata Home".',
+  'install.ios': 'Su iPhone: apri questa pagina in Safari, tocca Condividi e poi "Aggiungi alla schermata Home".',
+  'install.android': 'Apri questa pagina in Chrome (non dentro un\'altra app), tocca il menu ⋮ in alto a destra e poi "Installa app" o "Aggiungi a schermata Home".',
+  'install.desktop': 'In Chrome o Edge, clicca l\'icona di installazione a destra nella barra dell\'indirizzo, oppure apri il menu del browser e scegli "Installa ShapesCraft".',
   lead: 'Prima prova della scansione 3D. Questo passo verifica solo che l\'app capisca, da ogni foto, dove si trovava il telefono. Il modello 3D arriva dopo.',
   'mat.title': 'Stampa il tappetino 3D',
   'mat.hint': 'Stampalo al 100% sul formato indicato (A4 o A3). Appoggialo ben piatto sul tavolo, senza pieghe. La linea in basso deve misurare 100 mm.',
