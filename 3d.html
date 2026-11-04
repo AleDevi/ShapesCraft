@@ -96,6 +96,14 @@
           <canvas id="model-view" class="scene"></canvas>
           <p class="hint" data-i18n="model.view"></p>
           <p id="model-size" class="model-size"></p>
+          <div class="refine">
+            <label for="smooth"><span data-i18n="model.smooth"></span> <output id="smooth-value"></output></label>
+            <input id="smooth" type="range" min="0" max="10" step="1" value="4" />
+            <label for="detail"><span data-i18n="model.detail"></span> <output id="detail-value"></output></label>
+            <input id="detail" type="range" min="0" max="4" step="1" value="2" />
+            <p id="model-triangles" class="hint"></p>
+            <p class="hint" data-i18n="model.refine.hint"></p>
+          </div>
           <div class="buttons">
             <button id="stl" type="button" data-i18n="model.stl"></button>
           </div>
