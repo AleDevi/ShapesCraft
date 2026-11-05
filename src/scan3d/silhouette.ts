@@ -152,7 +152,7 @@ function bin(r: number, g: number, b: number): number {
 }
 /** Colours the table shows this often and the object hardly ever are table. */
 const TABLE_SHARE = 0.004;
-const TABLE_OVER_OBJECT = 6;
+const TABLE_OVER_OBJECT = 3;
 
 interface Prepared { kind: Uint8Array; white: number[] | null }
 
@@ -227,6 +227,7 @@ export function silhouettes(views: View[], map: PaperMap, reach: Reach): Uint8Ar
     }
     return mask;
   });
+  views.forEach((v, n) => fillHighlights(masks[n], v.image.width, v.image.height));
   const objectTotal = objectHist.reduce((s, c) => s + c, 0) || 1;
 
   views.forEach((v, n) => {
@@ -254,6 +255,45 @@ export function silhouettes(views: View[], map: PaperMap, reach: Reach): Uint8Ar
     }
   });
   return masks;
+}
+
+/** Paper patches up to this share of the frame, closed in by the object all round, are glints on it. */
+const MAX_GLINT = 0.0006;
+
+/**
+ * A shiny object reflects the light in bright, colourless spots that look like paper.
+ * Real paper seen past the object always reaches the rest of the paper, ink or the
+ * frame's edge; a small patch with object all round it is a glint, and object too.
+ */
+function fillHighlights(mask: Uint8Array, w: number, h: number) {
+  const maxArea = Math.max(20, Math.round(MAX_GLINT * w * h));
+  const seen = new Uint8Array(w * h);
+  const stack: number[] = [];
+  const patch: number[] = [];
+  for (let s = 0; s < w * h; s++) {
+    if (mask[s] !== PAPER || seen[s]) continue;
+    stack.length = 0;
+    patch.length = 0;
+    stack.push(s);
+    seen[s] = 1;
+    let open = false;
+    while (stack.length) {
+      const k = stack.pop()!;
+      if (patch.length <= maxArea) patch.push(k);
+      const x = k % w, y = (k - x) / w;
+      if (x === 0 || y === 0 || x === w - 1 || y === h - 1) open = true;
+      for (const q of [x > 0 ? k - 1 : -1, x < w - 1 ? k + 1 : -1, y > 0 ? k - w : -1, y < h - 1 ? k + w : -1]) {
+        if (q < 0) continue;
+        if (mask[q] === PAPER) {
+          if (!seen[q]) {
+            seen[q] = 1;
+            stack.push(q);
+          }
+        } else if (mask[q] !== OBJECT) open = true;
+      }
+    }
+    if (!open && patch.length <= maxArea) for (const k of patch) mask[k] = OBJECT;
+  }
 }
 
 function median(a: number[]): number {

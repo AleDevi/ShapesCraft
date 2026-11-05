@@ -10,6 +10,7 @@ import { MATS, matById, type MatId } from './mat';
 import { FAIR_MM, GOOD_MM, SceneView, drawCoverage, quality, type Colors } from './view';
 import { colorCopy, sharpestFrames } from './video';
 import { carve, measure } from './carve';
+import { simplify, smooth } from './refine';
 import { stl, surface, type Mesh } from './mesh';
 import { MeshView } from './meshview';
 import type { Rgba } from '../core/image';
@@ -26,11 +27,14 @@ const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as 
 interface Shot { name: string; det: MatDetection; color: Rgba }
 let shots: Shot[] = [];
 let solved: SolvedSession | null = null;
-let model: { mesh: Mesh; size: NonNullable<ReturnType<typeof measure>> } | null = null;
+/** `raw`: straight from the carving; `mesh`: smoothed and simplified as the sliders say. */
+let model: { raw: Mesh; mesh: Mesh; size: NonNullable<ReturnType<typeof measure>> } | null = null;
 let modelEmpty = false;
 
-/** Above this many triangles the preview uses a coarser copy of the model, to stay smooth on phones. */
-const PREVIEW_TRIANGLES = 40000;
+/** Triangles kept at each step of the "detail" slider; the last step keeps them all. */
+const DETAIL_TRIANGLES = [1500, 3000, 6000, 12000, Infinity];
+/** Smoothing passes for a step of the "smoothing" slider: gentle at first, then much stronger. */
+const smoothPasses = (step: number) => Math.round(1.5 * step * step);
 
 const langSelect = $<HTMLSelectElement>('lang');
 const savedLang = storageGet('lang');
@@ -182,6 +186,35 @@ $('json').addEventListener('click', () => {
 });
 
 $('build-model').addEventListener('click', () => void buildModel());
+
+const smoothInput = $<HTMLInputElement>('smooth');
+const detailInput = $<HTMLInputElement>('detail');
+for (const [input, key] of [[smoothInput, 'smooth3d'], [detailInput, 'detail3d']] as const) {
+  const saved = storageGet(key);
+  if (saved !== null) input.value = saved;
+  input.addEventListener('input', () => showRefineValues());
+  input.addEventListener('change', () => {
+    storageSet(key, input.value);
+    refine();
+  });
+}
+
+function showRefineValues() {
+  $('smooth-value').textContent = smoothInput.value;
+  const target = DETAIL_TRIANGLES[Number(detailInput.value)];
+  $('detail-value').textContent = Number.isFinite(target) ? `≤ ${target.toLocaleString(lang)}` : t('model.detail.all');
+}
+
+/** Smooths and simplifies the carved model as the sliders say, then shows it. */
+function refine() {
+  if (!model) return;
+  const target = DETAIL_TRIANGLES[Number(detailInput.value)];
+  let mesh = smooth(model.raw, smoothPasses(Number(smoothInput.value)));
+  if (Number.isFinite(target)) mesh = simplify(mesh, target);
+  model.mesh = mesh;
+  modelView.set(mesh);
+  render();
+}
 $('stl').addEventListener('click', () => {
   if (model) void download(new Blob([stl(model.mesh)], { type: 'model/stl' }), 'shapescraft-3d.stl');
 });
@@ -213,8 +246,8 @@ async function buildModel() {
     const size = measure(volume);
     if (size) {
       const mesh = surface(volume, mat.center);
-      model = { mesh, size };
-      modelView.set(mesh.triangles.length / 3 > PREVIEW_TRIANGLES ? surface(volume, mat.center, 2) : mesh);
+      model = { raw: mesh, mesh, size };
+      refine();
     } else modelEmpty = true;
     setStatus(null);
   } finally {
@@ -291,6 +324,8 @@ function render() {
     $('model-size').textContent = t('model.size', {
       w: Math.round(s.width), d: Math.round(s.depth), h: Math.round(s.height), ml: Math.round(s.volumeMl),
     });
+    $('model-triangles').textContent = t('model.triangles', { n: (model.mesh.triangles.length / 3).toLocaleString(lang) });
+    showRefineValues();
     modelView.draw();
   }
   const photos = solved.photos;
