@@ -92,9 +92,13 @@ for (const radio of controls.fill) {
   });
 }
 /** Thin single lines are open paths with no inside; widened ones are closed outlines. */
-const openLines = () => controls.centerline.checked && !(Number(controls.lineWidth.value) > 0);
+function openLines() {
+  return controls.centerline.checked && !(Number(controls.lineWidth.value) > 0);
+}
 /** Filled output applies to closed shapes only, so thin single lines turn it off. */
-const isFilled = () => !openLines() && controls.fill.some((r) => r.checked && r.value === 'filled');
+function isFilled() {
+  return !openLines() && controls.fill.some((r) => r.checked && r.value === 'filled');
+}
 
 // Welcome page and tool are two views; the hash lets the phone's back button return to the welcome page.
 const welcome = $('welcome');
