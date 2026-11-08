@@ -196,6 +196,12 @@ export interface TraceOptions {
   smoothMm: number;
   /** Trace pen strokes as single lines along their centre instead of as outlines. */
   centerline: boolean;
+  /**
+   * Single-line mode only: widens every line symmetrically about its centre to
+   * this thickness, in mm, and outputs the closed outline of the widened line
+   * (round ends and joins). 0 keeps the thin centre lines.
+   */
+  lineWidthMm: number;
 }
 
 export const DEFAULT_TRACE: Omit<TraceOptions, 'threshold'> = {
@@ -206,6 +212,7 @@ export const DEFAULT_TRACE: Omit<TraceOptions, 'threshold'> = {
   blurMm: 0.3,
   smoothMm: 0,
   centerline: false,
+  lineWidthMm: 0,
 };
 
 /** Traced outlines in sheet millimetres. */
@@ -257,6 +264,7 @@ function traceCenterlines(
 
   const polygons: Point[][] = [];
   const shapes: PathShape[] = [];
+  const centres: { points: Point[]; closed: boolean }[] = [];
   const scale = Math.max(opts.smoothMm, MIN_CENTERLINE_SMOOTH_MM) * r.pxPerMm;
   for (const line of lines) {
     let pts = smoothContour(line.points, scale, opts.cornerDeg, line.closed);
@@ -268,11 +276,60 @@ function traceCenterlines(
     const tol = opts.toleranceMm * r.pxPerMm;
     const simple = line.closed ? simplifyClosed(pts, tol) : simplifyOpen(pts, tol);
     if (simple.length < (line.closed ? 3 : 2)) continue;
+    if (opts.lineWidthMm > 0) {
+      // Widen the dense smoothed line, not the simplified one, so curves stay round.
+      centres.push({ points: pts, closed: line.closed });
+      continue;
+    }
     const mm = simple.map(toMm);
     polygons.push(mm);
     shapes.push(smoothPath(mm, opts.cornerDeg, 1, opts.toleranceMm, line.closed));
   }
+  if (opts.lineWidthMm > 0) {
+    for (const loop of widenLines(centres, w, h, (opts.lineWidthMm / 2) * r.pxPerMm)) {
+      const simple = simplifyClosed(loop, opts.toleranceMm * r.pxPerMm);
+      if (simple.length < 3) continue;
+      const mm = simple.map(toMm);
+      polygons.push(mm);
+      shapes.push(smoothPath(mm, opts.cornerDeg, 1, opts.toleranceMm));
+    }
+  }
   return { polygons, shapes };
+}
+
+/**
+ * Outlines of lines drawn with a round pen of radius `radius` px: the
+ * iso-contour at `radius` of the distance to the nearest line. Overlapping
+ * and crossing lines merge into one shape, and enclosed areas become holes.
+ */
+export function widenLines(lines: { points: Point[]; closed: boolean }[], w: number, h: number, radius: number): Point[][] {
+  const far = radius + 2;
+  const data = new Float32Array(w * h).fill(far);
+  const reach = Math.ceil(far);
+  for (const { points, closed } of lines) {
+    const n = points.length;
+    for (let i = 0; i < (closed ? n : n - 1); i++) {
+      // Pixel (x, y) has its centre at (x + 0.5, y + 0.5), as in isoContours.
+      const a = { x: points[i].x - 0.5, y: points[i].y - 0.5 };
+      const b = { x: points[(i + 1) % n].x - 0.5, y: points[(i + 1) % n].y - 0.5 };
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const len2 = dx * dx + dy * dy;
+      const x0 = Math.max(0, Math.floor(Math.min(a.x, b.x)) - reach);
+      const x1 = Math.min(w - 1, Math.ceil(Math.max(a.x, b.x)) + reach);
+      const y0 = Math.max(0, Math.floor(Math.min(a.y, b.y)) - reach);
+      const y1 = Math.min(h - 1, Math.ceil(Math.max(a.y, b.y)) + reach);
+      for (let y = y0; y <= y1; y++) {
+        for (let x = x0; x <= x1; x++) {
+          const t = len2 > 0 ? Math.min(1, Math.max(0, ((x - a.x) * dx + (y - a.y) * dy) / len2)) : 0;
+          const d = Math.hypot(x - a.x - t * dx, y - a.y - t * dy);
+          const k = y * w + x;
+          if (d < data[k]) data[k] = d;
+        }
+      }
+    }
+  }
+  return isoContours({ width: w, height: h, data }, radius);
 }
 
 /** Moves the end point `end` of a line (whose points run away from it) outward by `by`. */
