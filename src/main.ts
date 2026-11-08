@@ -42,6 +42,7 @@ const controls = {
   smooth: $<HTMLInputElement>('smooth'),
   invert: $<HTMLInputElement>('invert'),
   centerline: $<HTMLInputElement>('centerline'),
+  lineWidth: $<HTMLInputElement>('linewidth'),
   showPhoto: $<HTMLInputElement>('show-photo'),
   fill: [...document.querySelectorAll<HTMLInputElement>('input[name="fill"]')],
   format: [...document.querySelectorAll<HTMLInputElement>('input[name="format"]')],
@@ -81,6 +82,7 @@ controls.minarea.value = String(DEFAULT_TRACE.minAreaMm2);
 controls.smooth.value = String(DEFAULT_TRACE.smoothMm);
 controls.invert.checked = DEFAULT_TRACE.invert;
 controls.centerline.checked = DEFAULT_TRACE.centerline;
+controls.lineWidth.value = String(DEFAULT_TRACE.lineWidthMm);
 const savedFill = localStorageGet('fill');
 for (const radio of controls.fill) {
   radio.checked = radio.value === (savedFill === 'filled' ? 'filled' : 'outline');
@@ -89,8 +91,10 @@ for (const radio of controls.fill) {
     render();
   });
 }
-/** Filled output applies to closed shapes only, so single-line mode turns it off. */
-const isFilled = () => !controls.centerline.checked && controls.fill.some((r) => r.checked && r.value === 'filled');
+/** Thin single lines are open paths with no inside; widened ones are closed outlines. */
+const openLines = () => controls.centerline.checked && !(Number(controls.lineWidth.value) > 0);
+/** Filled output applies to closed shapes only, so thin single lines turn it off. */
+const isFilled = () => !openLines() && controls.fill.some((r) => r.checked && r.value === 'filled');
 
 // Welcome page and tool are two views; the hash lets the phone's back button return to the welcome page.
 const welcome = $('welcome');
@@ -162,7 +166,7 @@ for (const id of ['camera', 'upload']) {
 }
 
 let pending = 0;
-for (const el of [controls.threshold, controls.tolerance, controls.minarea, controls.smooth, controls.invert, controls.centerline]) {
+for (const el of [controls.threshold, controls.tolerance, controls.minarea, controls.smooth, controls.lineWidth, controls.invert, controls.centerline]) {
   el.addEventListener('input', () => {
     updateOutputs();
     // Coalesce slider drags into one re-trace per frame.
@@ -296,6 +300,7 @@ function options(): TraceOptions {
     smoothMm: Number(controls.smooth.value),
     invert: controls.invert.checked,
     centerline: controls.centerline.checked,
+    lineWidthMm: Number(controls.lineWidth.value),
   };
 }
 
@@ -327,13 +332,16 @@ function render() {
   }
   const box = boundingBox(polygons);
   summary.textContent =
-    `${polygons.length} ${t(controls.centerline.checked ? (polygons.length === 1 ? 'summary.line' : 'summary.lines') : polygons.length === 1 ? 'summary.shape' : 'summary.shapes')} · ` +
+    `${polygons.length} ${t(openLines() ? (polygons.length === 1 ? 'summary.line' : 'summary.lines') : polygons.length === 1 ? 'summary.shape' : 'summary.shapes')} · ` +
     `${(box.maxX - box.minX).toFixed(1)} × ${(box.maxY - box.minY).toFixed(1)} mm`;
 }
 
 function updateOutputs() {
-  for (const radio of controls.fill) radio.disabled = controls.centerline.checked;
-  $('fill-hint').textContent = t(controls.centerline.checked ? 'fill.lines' : 'fill.hint');
+  for (const radio of controls.fill) radio.disabled = openLines();
+  $('fill-hint').textContent = t(openLines() ? 'fill.lines' : 'fill.hint');
+  $('linewidth-row').hidden = !controls.centerline.checked;
+  const width = Number(controls.lineWidth.value);
+  $<HTMLOutputElement>('linewidth-out').value = width ? `${width.toFixed(1)} mm` : t('linewidth.thin');
   $<HTMLOutputElement>('threshold-out').value = Number(controls.threshold.value || 0).toFixed(2);
   $<HTMLOutputElement>('tolerance-out').value = `${controls.tolerance.value} mm`;
   $<HTMLOutputElement>('minarea-out').value = `${controls.minarea.value} mm²`;

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { frameById, frameSvg } from '../src/core/frame';
 import { applyH, findHomography } from '../src/core/homography';
 import { detectFrame, prepare, rectify, trace, DEFAULT_TRACE } from '../src/core/pipeline';
+import type { Point } from '../src/core/homography';
 import { framePdf } from '../src/core/pdf';
 import { exportSvg } from '../src/core/svg';
 import { smoothContour, smoothPath } from '../src/core/trace';
@@ -233,6 +234,29 @@ describe('single-line (centreline) tracing', () => {
     expect(Math.max(...line.map((p) => Math.abs(p.y - 200)))).toBeLessThan(0.3);
 
     expect(exportSvg(out.shapes, out.polygons)).not.toMatch(/Z"\/>[\s\S]*Z"\/>/);
+  });
+
+  it('widens single lines symmetrically into closed outlines', { timeout: 60000 }, () => {
+    const det = detectFrame(photo, frame);
+    const rect = rectify(photo, frame, det, 5);
+    const prep = prepare(rect);
+    const out = trace(prep, rect, { ...DEFAULT_TRACE, threshold: prep.autoThreshold, centerline: true, lineWidthMm: 4 });
+    // The ring becomes an outer and an inner circle 2 mm either side of the centre; the stroke one capsule.
+    expect(out.shapes.length).toBe(3);
+    expect(out.shapes.every((s) => s.closed)).toBe(true);
+    const meanR = (poly: Point[]) => poly.reduce((s, p) => s + Math.hypot(p.x - ring.x, p.y - ring.y), 0) / poly.length;
+    const rings = out.polygons.filter((poly) => Math.abs(meanR(poly) - ring.r) < 5).map(meanR).sort((a, b) => a - b);
+    expect(rings.length).toBe(2);
+    expect(rings[0]).toBeCloseTo(ring.r - 2, 0);
+    expect(rings[1]).toBeCloseTo(ring.r + 2, 0);
+
+    const capsule = out.polygons.find((poly) => poly.every((p) => p.y > 190))!;
+    const xs = capsule.map((p) => p.x);
+    const ys = capsule.map((p) => p.y);
+    expect(Math.min(...xs)).toBeCloseTo(58, 0);
+    expect(Math.max(...xs)).toBeCloseTo(142, 0);
+    expect(Math.min(...ys)).toBeCloseTo(198, 0);
+    expect(Math.max(...ys)).toBeCloseTo(202, 0);
   });
 });
 
