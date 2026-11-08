@@ -1,9 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import { defineConfig, type Plugin } from 'vite';
-import { FRAMES } from './src/core/frame';
-import { framePdf, framePdfName } from './src/core/pdf';
-import { MATS } from './src/scan3d/mat';
-import { matPdf, matPdfName } from './src/scan3d/pdf';
+import { printables } from './src/printables';
 
 /** Publishes every frame PDF next to the app, so a computer can open it by link. */
 function framePdfs(): Plugin {
@@ -11,16 +8,7 @@ function framePdfs(): Plugin {
     name: 'frame-pdfs',
     apply: 'build',
     generateBundle() {
-      for (const frame of FRAMES) {
-        for (const lang of ['en', 'it'] as const) {
-          this.emitFile({ type: 'asset', fileName: `frames/${framePdfName(frame, lang)}`, source: framePdf(frame, lang) });
-        }
-      }
-      for (const lang of ['en', 'it'] as const) {
-        for (const { id: mat } of MATS) {
-          this.emitFile({ type: 'asset', fileName: `frames/${matPdfName(mat, lang)}`, source: matPdf(mat, lang) });
-        }
-      }
+      for (const { name, data } of printables()) this.emitFile({ type: 'asset', fileName: `frames/${name}`, source: data });
     },
   };
 }

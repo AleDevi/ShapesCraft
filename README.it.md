@@ -10,6 +10,22 @@ Niente installazione né registrazione: funziona nel browser di telefono, tablet
 
 Web app (PWA) che trasforma la foto di un disegno o di un oggetto appoggiato su una cornice stampata in un vettoriale SVG in scala reale, pronto per laser, CNC o plotter da taglio.
 
+## Scarica le cornici
+
+Stampale direttamente da qui, senza aprire l'app. Stampa al 100% ("dimensioni reali", niente "adatta alla pagina"): la linea di riferimento deve misurare 100 mm.
+
+| Per | Foglio | Italiano | Inglese |
+|---|---|---|---|
+| Cornice 2D A4 | A4 | [PDF](https://github.com/AleDevi/ShapesCraft/raw/main/frames/cornice-shapescraft-a4.pdf) | [PDF](https://github.com/AleDevi/ShapesCraft/raw/main/frames/frame-shapescraft-a4.pdf) |
+| Cornice 2D A3 | A3 | [PDF](https://github.com/AleDevi/ShapesCraft/raw/main/frames/cornice-shapescraft-a3.pdf) | [PDF](https://github.com/AleDevi/ShapesCraft/raw/main/frames/frame-shapescraft-a3.pdf) |
+| Cornice 2D mini 10 × 10 cm | A4 | [PDF](https://github.com/AleDevi/ShapesCraft/raw/main/frames/cornice-shapescraft-mini.pdf) | [PDF](https://github.com/AleDevi/ShapesCraft/raw/main/frames/frame-shapescraft-mini.pdf) |
+| Tappetino 3D rettangolare | A4 | [PDF](https://github.com/AleDevi/ShapesCraft/raw/main/frames/tappetino-3d-shapescraft-a4.pdf) | [PDF](https://github.com/AleDevi/ShapesCraft/raw/main/frames/mat-3d-shapescraft-a4.pdf) |
+| Tappetino 3D tondo Ø 196 mm | A4 | [PDF](https://github.com/AleDevi/ShapesCraft/raw/main/frames/tappetino-3d-tondo-shapescraft-a4.pdf) | [PDF](https://github.com/AleDevi/ShapesCraft/raw/main/frames/mat-3d-round-shapescraft-a4.pdf) |
+| Tappetino 3D tondo Ø 280 mm | A3 | [PDF](https://github.com/AleDevi/ShapesCraft/raw/main/frames/tappetino-3d-tondo-shapescraft-a3.pdf) | [PDF](https://github.com/AleDevi/ShapesCraft/raw/main/frames/mat-3d-round-shapescraft-a3.pdf) |
+| Tappetino 3D tondo piccolo Ø 132 mm | A4 | [PDF](https://github.com/AleDevi/ShapesCraft/raw/main/frames/tappetino-3d-tondo-piccolo-shapescraft.pdf) | [PDF](https://github.com/AleDevi/ShapesCraft/raw/main/frames/mat-3d-round-small-shapescraft.pdf) |
+
+Sono tutti nella cartella [`frames/`](frames) e, in un unico posto, nell'[ultima release](https://github.com/AleDevi/ShapesCraft/releases/latest). Li genera il codice stesso dell'app (`npm run frames`) e un test controlla che coincidano.
+
 ## Perché un colibrì
 
 Il colibrì vola intorno al fiore con estrema precisione: resta immobile a mezz'aria e gli gira intorno poco alla volta. È quello che si fa col telefono in ShapesCraft: lo si tiene fermo sopra la cornice per una foto nitida e, per la scansione 3D, si gira lentamente intorno all'oggetto, come il colibrì intorno al suo fiore.
@@ -44,6 +60,7 @@ npm install
 npm run dev     # server locale, raggiungibile anche dal telefono nella stessa rete
 npm test        # test su foto sintetiche in prospettiva
 npm run build
+npm run frames  # rigenera i PDF da stampare in frames/ dopo aver cambiato una cornice o un tappetino
 ```
 
 Per provarla dal telefono basta `npm run dev` e aprire l'indirizzo di rete sulla stessa Wi-Fi. Per installarla come app serve HTTPS: il workflow `.github/workflows/pages.yml` pubblica l'app su GitHub Pages a ogni push su `main` (in Settings → Pages scegli "GitHub Actions" come sorgente).
