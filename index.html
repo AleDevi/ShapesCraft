@@ -142,9 +142,24 @@
               <label><input type="radio" name="format" value="dxf" /> <span>DXF</span></label>
               <label><input type="radio" name="format" value="pdf" /> <span>PDF</span></label>
               <label><input type="radio" name="format" value="png" /> <span>PNG</span></label>
+              <label><input type="radio" name="format" value="stl" /> <span>STL</span></label>
             </div>
           </div>
           <small id="format-hint" class="hint"></small>
+          <!-- 2D to 3D: the shape extruded into a solid ready for 3D printing. -->
+          <div id="stl-options" class="stl-options" hidden>
+            <label>
+              <span><span data-i18n="stl.thickness"></span> <output id="thickness-out"></output></span>
+              <input id="thickness" type="range" min="0.4" max="20" step="0.2" />
+            </label>
+            <label>
+              <span><span data-i18n="stl.round"></span> <output id="round-out"></output></span>
+              <input id="round" type="range" min="0" max="5" step="0.1" />
+              <small class="hint" data-i18n="stl.round.hint"></small>
+            </label>
+            <canvas id="stl-view" class="stl-view" aria-label="3D"></canvas>
+            <p id="stl-status" class="hint" role="status"></p>
+          </div>
           <div class="buttons">
             <button id="download" type="button"></button>
             <button id="share" type="button" class="secondary" hidden></button>

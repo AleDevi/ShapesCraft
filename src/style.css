@@ -188,7 +188,9 @@ button.link {
 #fill-hint { margin: -8px 0 0; }
 
 .export { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); }
-.segmented.formats > div { grid-template-columns: repeat(4, 1fr); }
+.segmented.formats > div { grid-template-columns: repeat(5, 1fr); }
+.stl-options { display: grid; gap: 14px; margin-top: 14px; }
+.stl-view { width: 100%; aspect-ratio: 4 / 3; display: block; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; touch-action: none; cursor: grab; }
 #format-hint { display: block; margin: 6px 0 0; }
 
 /* Option switch: the radios stay in the DOM for keyboard and screen readers. */
