@@ -43,10 +43,10 @@ const n = (v: number) => String(Math.round(v * 1000) / 1000);
  * The printable frame as a one-page vector PDF at real size. PDFs print at
  * 100% more reliably than SVGs and can be shared from a phone to any printer.
  */
-export function framePdf(f: FrameLayout, lang: Lang = 'en'): Uint8Array {
+export function framePdf(f: FrameLayout, lang: Lang = 'en', ids?: readonly number[]): Uint8Array {
   const paper = f.paper ?? { width: f.width, height: f.height };
   const offset = { x: (paper.width - f.width) / 2, y: (paper.height - f.height) / 2 };
-  return drawingPdf(frameDrawing(f, lang), paper.width, paper.height, offset);
+  return drawingPdf(frameDrawing(f, lang, ids), paper.width, paper.height, offset);
 }
 
 /**
@@ -118,6 +118,6 @@ export function pdfMmTransform(heightMm: number): string {
 }
 
 /** File name of the frame PDF, in the language of its text. */
-export function framePdfName(f: FrameLayout, lang: Lang): string {
-  return `${lang === 'it' ? 'cornice' : 'frame'}-shapescraft-${f.id}.pdf`;
+export function framePdfName(f: FrameLayout, lang: Lang, code?: string): string {
+  return `${lang === 'it' ? 'cornice' : 'frame'}-shapescraft-${f.id}${code ? `-${code}` : ''}.pdf`;
 }

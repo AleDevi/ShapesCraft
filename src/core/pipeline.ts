@@ -1,5 +1,6 @@
 import { AR } from '../vendor/js-aruco2/aruco.js';
 import { DICTIONARY, MARKER_IDS, markerCorners, workArea, type FrameLayout } from './frame';
+import { isUniqueId, uniqueCode, uniqueSlot } from './markers';
 import { applyH, findHomography, type Mat3, type Point } from './homography';
 import {
   boxBlur,
@@ -25,6 +26,10 @@ export interface Detection {
   /** Maps sheet millimetres to photo pixels. */
   sheetToPhoto: Mat3;
   markerIds: number[];
+  /** The frame has unique markers (see markers.ts) instead of the fixed ones. */
+  unique: boolean;
+  /** Unique frames with all four markers in view: the project code printed on it. */
+  code?: string;
   /** Mean reprojection error of the marker corners, in photo pixels. */
   errorPx: number;
 }
@@ -39,20 +44,26 @@ export function detectFrame(photo: Gray, frame: FrameLayout): Detection {
   const markers = detector.detect(grayToRgba(small));
 
   const expected = markerCorners(frame);
+  // Fixed frames have ids 0..3; a unique one has an id from its own range in each corner.
+  // Whichever kind has more markers in view wins.
+  const fixed = new Set(markers.filter((m) => (MARKER_IDS as readonly number[]).includes(m.id)).map((m) => m.id));
+  const uniqueSlots = new Set(markers.filter((m) => isUniqueId(m.id)).map((m) => uniqueSlot(m.id, 4)));
+  const unique = uniqueSlots.size > fixed.size;
+  const slotOf = (id: number) => (unique ? (isUniqueId(id) ? uniqueSlot(id, 4) : -1) : MARKER_IDS.indexOf(id as 0));
   const src: Point[] = [];
   const dst: Point[] = [];
   const ids: number[] = [];
-  for (const id of MARKER_IDS) {
-    // Keep the most confident detection of each id.
-    const found = markers.filter((m) => m.id === id).sort((a, b) => a.hammingDistance - b.hammingDistance)[0];
+  for (let slot = 0; slot < 4; slot++) {
+    // Keep the most confident detection for each corner.
+    const found = markers.filter((m) => slotOf(m.id) === slot).sort((a, b) => a.hammingDistance - b.hammingDistance)[0];
     if (!found) continue;
-    ids.push(id);
+    ids.push(found.id);
     // Detector coordinates are integer pixel indices of the low-res image; the
     // pixel centre is at +0.5. Edge refinement then recovers sub-pixel corners.
     const rough = found.corners.map((c) => ({ x: (c.x + 0.5) * factor, y: (c.y + 0.5) * factor }));
     const refined = refineQuad(photo, rough, 2 * factor + 2);
     refined.forEach((c, i) => {
-      src.push(expected[id][i]);
+      src.push(expected[slot][i]);
       dst.push(c);
     });
   }
@@ -64,7 +75,8 @@ export function detectFrame(photo: Gray, frame: FrameLayout): Detection {
     const q = applyH(sheetToPhoto, p);
     return s + Math.hypot(q.x - dst[i].x, q.y - dst[i].y);
   }, 0) / src.length;
-  return { sheetToPhoto, markerIds: ids, errorPx };
+  const code = unique && ids.length === 4 ? uniqueCode(ids) : undefined;
+  return { sheetToPhoto, markerIds: ids, unique, code, errorPx };
 }
 
 /**

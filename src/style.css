@@ -219,3 +219,7 @@ h1 .logo { width: 1.25em; height: 1.25em; vertical-align: -0.22em; margin-right:
 .install { text-align: center; margin: 12px 0 0; }
 .install button { flex: none; min-width: 200px; }
 .install .hint { margin: 6px 0 0; }
+
+/* Unique markers: the project code and the button to draw new ones. */
+.unique-box { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin: 4px 0 8px; }
+.unique-box strong { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: 0.04em; overflow-wrap: anywhere; }

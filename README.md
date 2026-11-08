@@ -27,6 +27,7 @@ The app is available in English and Italian: it follows the phone's language, an
 ## How it works
 
 - **Markers**: four ArUco `ARUCO_MIP_36h12` markers (ids 0–3) detected with [js-aruco2](https://github.com/damianofalcioni/js-aruco2) (bundled in `src/vendor`), then refined to sub-pixel accuracy by fitting a line to each side.
+- **Unique markers** (2D frames and 3D mats): instead of the fixed ids, a sheet can get ids drawn at random from 100–249 for one project. On a sheet with *n* markers, position *i* only takes ids ≡ *i* (mod *n*), so every id tells by itself where it sits: the app recognises the sheet on any device without storing anything, and the project code printed on it is the set of ids written in base 32 (`src/core/markers.ts`).
 - **Perspective**: least-squares homography over the 16 marker corners; the frame window is resampled at 5 px/mm.
 - **Lighting**: the paper background is estimated with a quadratic surface and removed, then an automatic threshold (Otsu) is applied.
 - **Vectorisation**: marching squares with sub-pixel interpolation, Douglas–Peucker simplification, sharp corners preserved and Bézier curves everywhere else.

@@ -2,6 +2,8 @@ import './style.css';
 import { registerServiceWorker, setupInstall } from './pwa';
 import { FRAMES, frameById } from './core/frame';
 import { framePdf, framePdfName } from './core/pdf';
+import { MarkerChoice } from './core/markerChoice';
+import type { MarkerMode } from './core/markers';
 import { defaultLang, translator, type Lang, type Translate } from './i18n';
 import { grayToRgba, toGray } from './core/image';
 import {
@@ -68,6 +70,7 @@ langSelect.addEventListener('change', () => {
   lang = langSelect.value as Lang;
   localStorageSet('lang', lang);
   applyLang();
+  showMarkers();
 });
 applyLang();
 
@@ -113,9 +116,38 @@ const SITE_URL = 'https://aledevi.github.io/ShapesCraft/';
 const frameStatus = $<HTMLParagraphElement>('frame-status');
 const shareButton = $<HTMLButtonElement>('share-frame');
 
+// Fixed markers serve every scan; unique ones are drawn for one project (see core/markers.ts).
+const markerChoice = new MarkerChoice('markers2d');
+const markerRadios = [...document.querySelectorAll<HTMLInputElement>('input[name="markers"]')];
+for (const r of markerRadios) {
+  r.checked = r.value === markerChoice.mode;
+  r.addEventListener('change', () => {
+    markerChoice.mode = r.value as MarkerMode;
+    showMarkers();
+  });
+}
+$('unique-new').addEventListener('click', () => {
+  markerChoice.renew(frameSelect.value, 4);
+  showMarkers();
+});
+frameSelect.addEventListener('change', () => showMarkers());
+
+function showMarkers() {
+  const mode = markerChoice.mode;
+  $('markers-hint').textContent = t(`markers.${mode}.hint`);
+  $('unique-box').hidden = mode === 'fixed';
+  $('unique-code').textContent = mode === 'unique' ? t('markers.code', { code: markerChoice.code(frameSelect.value, 4)! }) : '';
+  // The published PDFs have the fixed markers only.
+  $('link-frame').hidden = mode === 'unique';
+  frameStatus.textContent = '';
+}
+showMarkers();
+
 function frameFile(): File {
   const frame = frameById(frameSelect.value);
-  return new File([framePdf(frame, lang) as BlobPart], framePdfName(frame, lang), { type: 'application/pdf' });
+  const ids = markerChoice.ids(frame.id, 4);
+  const code = markerChoice.code(frame.id, 4);
+  return new File([framePdf(frame, lang, ids) as BlobPart], framePdfName(frame, lang, code), { type: 'application/pdf' });
 }
 
 // Sharing files (email, chat apps, Drive, a printer app) is the easiest way to print from a phone.
@@ -201,7 +233,7 @@ async function exportFile(): Promise<File | null> {
   else if (f === 'dxf') data = exportDxf(shapes, polygons, PADDING_MM);
   else if (f === 'pdf') data = exportPdf(shapes, polygons, PADDING_MM, isFilled()) as BlobPart;
   else data = (await renderPng(shapes, polygons)) as BlobPart;
-  return new File([data], exportName(f), { type: MIME[f] });
+  return new File([data], exportName(f, new Date(), session.detection.code), { type: MIME[f] });
 }
 
 /** Draws the shapes on a white canvas at real size and records the dpi in the PNG. */
@@ -278,7 +310,8 @@ async function processPhoto(file: File) {
     result.hidden = false;
     retrace();
     const found = detection.markerIds.length;
-    setStatus(() => (found < 4 ? t('status.partial', { n: found }) : t('status.found')));
+    const code = detection.code;
+    setStatus(() => (found < 4 ? t('status.partial', { n: found }) : code ? t('status.foundUnique', { code }) : t('status.found')));
     result.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (err) {
     console.error(err);

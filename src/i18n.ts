@@ -23,6 +23,17 @@ const en = {
   'frame.hint':
     'Send the PDF to yourself, to a computer or to a print shop, and print it at 100% (no "fit to page"): ' +
     'the line at the bottom must measure 100 mm. For a rigid frame, glue it to card or thin plastic and cut along the black lines.',
+  'markers.title': 'Markers',
+  'markers.fixed': 'Fixed',
+  'markers.unique': 'Unique',
+  'markers.fixed.hint': 'Always the same markers: print the frame once and use it for every scan.',
+  'markers.unique.hint':
+    'Markers drawn at random just for this project, with their code printed on the sheet: no other frame is the same. ' +
+    'The app recognises it on any device, with nothing to set up; the PDF stays the same until you ask for new markers.',
+  'markers.code': 'Project code: {code}',
+  'markers.new': 'New markers',
+  'sheet.unique': 'unique markers · code {code}',
+  'status.foundUnique': 'Unique frame found, code {code}.',
   'frame.share': 'Share PDF',
   'frame.download': 'Download PDF',
   'frame.link': 'Copy link',
@@ -102,6 +113,17 @@ const it: Record<Key, string> = {
   'frame.hint':
     'Manda il PDF a te stesso, a un computer o a una copisteria e stampalo al 100% (senza "adatta alla pagina"): ' +
     'la linea in basso deve misurare 100 mm. Per una cornice rigida incollala su cartoncino o plastica sottile e ritaglia lungo le linee nere.',
+  'markers.title': 'Marker',
+  'markers.fixed': 'Fissi',
+  'markers.unique': 'Unici',
+  'markers.fixed.hint': 'Sempre gli stessi marker: stampi la cornice una volta e va bene per tutte le scansioni.',
+  'markers.unique.hint':
+    'Marker estratti a caso solo per questo progetto, con il loro codice stampato sul foglio: nessun\'altra cornice è uguale. ' +
+    "L'app la riconosce su qualsiasi dispositivo, senza impostare nulla; il PDF resta lo stesso finché non chiedi nuovi marker.",
+  'markers.code': 'Codice progetto: {code}',
+  'markers.new': 'Nuovi marker',
+  'sheet.unique': 'marker unici · codice {code}',
+  'status.foundUnique': 'Cornice unica trovata, codice {code}.',
   'frame.share': 'Condividi PDF',
   'frame.download': 'Scarica PDF',
   'frame.link': 'Copia link',

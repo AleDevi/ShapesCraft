@@ -36,7 +36,8 @@ const TABLE_FAR = 150;
 const maps = new Map<string, PaperMap>();
 
 export function paperMap(mat: MatLayout): PaperMap {
-  const cached = maps.get(mat.id);
+  const key = mat.key ?? mat.id;
+  const cached = maps.get(key);
   if (cached) return cached;
   const width = Math.ceil(mat.width * PER_MM);
   const height = Math.ceil(mat.height * PER_MM);
@@ -55,7 +56,7 @@ export function paperMap(mat: MatLayout): PaperMap {
   };
 
   // The labels differ by language: keep clear of the longest text that could be printed there.
-  const ops = matDrawing(mat, { title: 'x'.repeat(40), scale: 'x'.repeat(40), place: 'x'.repeat(26), cut: 'x'.repeat(50) });
+  const ops = matDrawing(mat, { title: 'x'.repeat(40), scale: 'x'.repeat(40), place: 'x'.repeat(26), cut: 'x'.repeat(50), code: mat.key ? 'x'.repeat(40) : undefined, codeOnly: mat.key ? 'x'.repeat(16) : undefined });
   for (const op of ops) {
     if (op.kind === 'poly' && op.gray < 0.5) mark(op.points, 2, (x, y) => convexDistance(op.points, x, y) < INK_MARGIN);
     else if (op.kind === 'line') {
@@ -73,7 +74,7 @@ export function paperMap(mat: MatLayout): PaperMap {
     if (op.kind === 'poly' && op.gray >= 0.5) mark(op.points, 1, (x, y) => convexDistance(op.points, x, y) < -CELL_INSET);
 
   const map = { mat, perMm: PER_MM, width, height, data };
-  maps.set(mat.id, map);
+  maps.set(key, map);
   return map;
 }
 

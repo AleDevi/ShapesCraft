@@ -27,6 +27,7 @@ L'app è in italiano e in inglese: segue la lingua del telefono e si può cambia
 ## Come funziona
 
 - **Marker**: quattro ArUco `ARUCO_MIP_36h12` (id 0–3) rilevati con [js-aruco2](https://github.com/damianofalcioni/js-aruco2) (incluso in `src/vendor`), poi raffinati al sub-pixel adattando una retta su ogni lato.
+- **Marker unici** (cornici 2D e tappetini 3D): al posto degli id fissi, un foglio può avere id estratti a caso tra 100 e 249 per un solo progetto. Su un foglio con *n* marker, la posizione *i* accetta solo id ≡ *i* (mod *n*), quindi ogni id dice da solo dove si trova: l'app riconosce il foglio su qualsiasi dispositivo senza salvare nulla, e il codice progetto stampato sopra è l'insieme degli id scritto in base 32 (`src/core/markers.ts`).
 - **Prospettiva**: omografia ai minimi quadrati sui 16 angoli dei marker; la finestra della cornice viene ricampionata a 5 px/mm.
 - **Luce**: lo sfondo della carta viene stimato con una superficie quadratica e rimosso, poi soglia automatica (Otsu).
 - **Vettorializzazione**: marching squares con interpolazione sub-pixel, semplificazione Douglas–Peucker, angoli vivi preservati e curve di Bézier sul resto.
