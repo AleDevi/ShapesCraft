@@ -3,7 +3,8 @@ import { DICTIONARY } from '../core/frame';
 import { applyH, findHomography, invert3, solve, type Mat3, type Point } from '../core/homography';
 import { downscale, grayToRgba, type Gray } from '../core/image';
 import { refineQuad } from '../core/pipeline';
-import { MATS, matById, matOfMarker, type MatId } from './mat';
+import { isUniqueId, uniqueSlot } from '../core/markers';
+import { MATS, matById, matOfMarker, type MatId, type MatLayout } from './mat';
 
 /** Marker corners found in one photo: mat millimetres and photo pixels, pair by pair. */
 export interface MatDetection {
@@ -11,6 +12,8 @@ export interface MatDetection {
   height: number;
   /** Which mat was recognised: the one with the most markers in view. */
   matId: MatId;
+  /** The mat has unique markers (see core/markers.ts) instead of the fixed ones. */
+  unique: boolean;
   markerIds: number[];
   mat: Point[];
   px: Point[];
@@ -32,25 +35,37 @@ export function detectMat(photo: Gray): MatDetection {
   const factor = Math.max(1, Math.ceil(Math.max(photo.width, photo.height) / DETECT_MAX_SIDE));
   const small = downscale(photo, factor);
   const found = new AR.Detector({ dictionaryName: DICTIONARY }).detect(grayToRgba(small));
-  // The mat with the most markers in view; markers of any other mat are ignored.
+  const roughOf = (m: Marker) => m.corners.map((c) => ({ x: (c.x + 0.5) * factor, y: (c.y + 0.5) * factor }));
+
+  // Fixed mats: the one with the most markers in view; markers of any other mat are ignored.
   const votes = new Map<MatId, number>();
-  for (const m of found) {
-    const id = matOfMarker(m.id);
-    if (id) votes.set(id, (votes.get(id) ?? 0) + 1);
+  for (const id of new Set(found.map((m) => m.id))) {
+    const mat = matOfMarker(id);
+    if (mat) votes.set(mat, (votes.get(mat) ?? 0) + 1);
   }
-  const matId = [...votes.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? MATS[0].id;
-  const byId = new Map(matById(matId).markers.map((m) => [m.id, m.corners]));
+  const [fixedId, fixedCount] = [...votes.entries()].sort((a, b) => b[1] - a[1])[0] ?? [MATS[0].id, 0];
+  const unique = bestUniqueMat(found, roughOf);
+
+  // Each marker in view with its corners on the mat.
+  const matched: { id: number; corners: Point[]; marker: Marker }[] = [];
+  const isUnique = !!unique && unique.inliers > fixedCount;
+  const matId = isUnique ? unique.mat.id : fixedId;
+  if (isUnique) {
+    for (const [slot, marker] of unique.bySlot) matched.push({ id: marker.id, corners: unique.mat.markers[slot].corners, marker });
+  } else {
+    for (const { id, corners } of matById(matId).markers) {
+      const best = found.filter((m) => m.id === id).sort((a, b) => a.hammingDistance - b.hammingDistance)[0];
+      if (best) matched.push({ id, corners, marker: best });
+    }
+  }
 
   let ids: number[] = [];
   let mat: Point[][] = [];
   let px: Point[][] = [];
-  for (const [id, corners] of byId) {
-    const best = found.filter((m) => m.id === id).sort((a, b) => a.hammingDistance - b.hammingDistance)[0];
-    if (!best) continue;
-    const rough = best.corners.map((c) => ({ x: (c.x + 0.5) * factor, y: (c.y + 0.5) * factor }));
+  for (const { id, corners, marker } of matched) {
     ids.push(id);
     mat.push(corners);
-    px.push(refineQuad(photo, rough, 2 * factor + 2));
+    px.push(refineQuad(photo, roughOf(marker), 2 * factor + 2));
   }
   if (ids.length < MIN_MARKERS) throw new MatNotFoundError(ids.length, found.some((m) => m.id >= 0 && m.id <= 3));
 
@@ -66,10 +81,47 @@ export function detectMat(photo: Gray): MatDetection {
     mat = mat.filter((_, i) => i !== worst);
     px = px.filter((_, i) => i !== worst);
   }
-  return { width: photo.width, height: photo.height, matId, markerIds: ids, mat: mat.flat(), px: px.flat() };
+  return { width: photo.width, height: photo.height, matId, unique: isUnique, markerIds: ids, mat: mat.flat(), px: px.flat() };
 }
 
 const dist = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y);
+
+type Marker = { id: number; corners: Point[]; hammingDistance: number };
+
+/**
+ * Unique markers only say where they sit on a mat of a given shape, so every shape
+ * is tried: the right one places all of them where a single plane view puts them.
+ */
+function bestUniqueMat(found: Marker[], roughOf: (m: Marker) => Point[]) {
+  const candidates = found.filter((m) => isUniqueId(m.id));
+  let best: { mat: MatLayout; bySlot: Map<number, Marker>; inliers: number; error: number } | null = null;
+  for (const mat of MATS) {
+    const n = mat.markers.length;
+    const bySlot = new Map<number, Marker>();
+    for (const m of candidates) {
+      const slot = uniqueSlot(m.id, n);
+      const cur = bySlot.get(slot);
+      if (!cur || m.hammingDistance < cur.hammingDistance) bySlot.set(slot, m);
+    }
+    if (bySlot.size < MIN_MARKERS) continue;
+    const entries = [...bySlot];
+    const rough = entries.map(([, m]) => roughOf(m));
+    const h = findHomography(entries.flatMap(([slot]) => mat.markers[slot].corners), rough.flat());
+    const errs = entries.map(([slot], i) => Math.max(...mat.markers[slot].corners.map((c, k) => dist(applyH(h, c), rough[i][k]))));
+    // A marker fits when its corners land within a fifth of its side.
+    const fits = rough.map((q, i) => errs[i] < Math.max(3, 0.2 * dist(q[0], q[2]) / Math.SQRT2));
+    const inliers = fits.filter(Boolean).length;
+    const error = [...errs].sort((a, b) => a - b)[Math.floor(errs.length / 2)];
+    if (inliers >= MIN_MARKERS && (!best || inliers > best.inliers || (inliers === best.inliers && error < best.error)))
+      best = { mat, bySlot: new Map(entries.filter((_, i) => fits[i])), inliers, error };
+  }
+  return best;
+}
+
+/** Views of the same printed mat share this key: a fixed mat and a unique one of the same shape differ. */
+export function matKey(d: MatDetection): string {
+  return d.unique ? `${d.matId}:unique` : d.matId;
+}
 
 // ---------------------------------------------------------------------------
 // Camera model: pinhole, square pixels, principal point at the image centre, no
@@ -318,7 +370,7 @@ function totalCost(dets: MatDetection[], focal: number): number {
  * golden-section search for the focal length with the lowest total reprojection error.
  */
 export function solveSession(dets: MatDetection[]): SolvedSession {
-  if (new Set(dets.map((d) => d.matId)).size > 1) throw new Error('All views must show the same mat');
+  if (new Set(dets.map(matKey)).size > 1) throw new Error('All views must show the same mat');
   const guesses = dets.map(focalFromHomography).map((f, i) => (f ? f / Math.max(dets[i].width, dets[i].height) : null)).filter((f): f is number => f !== null);
   let focal = DEFAULT_FOCAL;
   let focalFromData = false;

@@ -1,6 +1,7 @@
 import { AR } from '../vendor/js-aruco2/aruco.js';
 import type { Point } from './homography';
 import { translator, type Lang } from '../i18n';
+import { uniqueCode, validUniqueIds } from './markers';
 
 export interface Rect { x: number; y: number; w: number; h: number }
 
@@ -126,8 +127,12 @@ export type FrameOp =
   /** A filled polygon, for shapes that are not axis-aligned rectangles. */
   | { kind: 'poly'; points: Point[]; gray: number };
 
-/** The printable frame as drawing primitives, shared by the SVG and PDF output. */
-export function frameDrawing(f: FrameLayout, lang: Lang = 'en'): FrameOp[] {
+/**
+ * The printable frame as drawing primitives, shared by the SVG and PDF output.
+ * `ids` are the marker ids clockwise from the top-left: the fixed ones, or a set of
+ * unique ids (see markers.ts), whose project code is then printed on the band.
+ */
+export function frameDrawing(f: FrameLayout, lang: Lang = 'en', ids: readonly number[] = MARKER_IDS): FrameOp[] {
   const t = translator(lang);
   const ops: FrameOp[] = [];
   const outer = outerRect(f);
@@ -138,10 +143,10 @@ export function frameDrawing(f: FrameLayout, lang: Lang = 'en'): FrameOp[] {
   ops.push({ kind: 'fill', rects: [outer, win], gray: 0.85, evenOdd: true });
 
   const origins = markerOrigins(f);
-  for (const id of MARKER_IDS) {
-    const cells = markerCells(id);
+  for (let slot = 0; slot < 4; slot++) {
+    const cells = markerCells(ids[slot]);
     const cell = s / cells.length;
-    const { x, y } = origins[id];
+    const { x, y } = origins[slot];
     // White quiet zone: the detector needs contrast all around the marker.
     const pad = f.markerPad - 1;
     ops.push({ kind: 'fill', rects: [{ x: x - pad, y: y - pad, w: s + 2 * pad, h: s + 2 * pad }], gray: 1 });
@@ -167,6 +172,7 @@ export function frameDrawing(f: FrameLayout, lang: Lang = 'en'): FrameOp[] {
     ops.push({ kind: 'line', x1: rx + i * 10, y1: ry, x2: rx + i * 10, y2: ry + len, width: 0.3 });
   }
   ops.push({ kind: 'text', x: cx, y: ry + 8, size: 3, body: `ShapesCraft ${f.id.toUpperCase()} · ${t('sheet.scale')}` });
+  if (validUniqueIds([...ids], 4)) ops.push({ kind: 'text', x: cx, y: ry + 11.6, size: 2.6, body: t('sheet.unique', { code: uniqueCode(ids) }) });
   ops.push({ kind: 'text', x: cx, y: f.margin + f.band / 2 - 1, size: 2.8, body: t('sheet.glue1') });
   ops.push({ kind: 'text', x: cx, y: f.margin + f.band / 2 + 3, size: 2.8, body: t('sheet.glue2') });
 
@@ -176,11 +182,11 @@ export function frameDrawing(f: FrameLayout, lang: Lang = 'en'): FrameOp[] {
 }
 
 /** Printable SVG of the frame at real size. */
-export function frameSvg(f: FrameLayout, lang: Lang = 'en'): string {
+export function frameSvg(f: FrameLayout, lang: Lang = 'en', ids: readonly number[] = MARKER_IDS): string {
   const hex = (g: number) => `#${Math.round(g * 255).toString(16).padStart(2, '0').repeat(3)}`;
   const rectPath = (r: Rect) => `M${r.x} ${r.y}h${r.w}v${r.h}h${-r.w}Z`;
   const escape = (text: string) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;');
-  const parts = frameDrawing(f, lang).map((op) => {
+  const parts = frameDrawing(f, lang, ids).map((op) => {
     switch (op.kind) {
       case 'fill':
         return `<path d="${op.rects.map(rectPath).join(' ')}" fill="${hex(op.gray)}"${op.evenOdd ? ' fill-rule="evenodd"' : ''}/>`;

@@ -5,8 +5,10 @@ import { defaultLang, type Lang } from '../i18n';
 import { toGray } from '../core/image';
 import { translator3d, type Translate3d } from './i18n';
 import { matPdf, matPdfName } from './pdf';
-import { MatNotFoundError, detectMat, solveSession, type MatDetection, type SolvedSession } from './pose';
-import { MATS, matById, type MatId } from './mat';
+import { MatNotFoundError, detectMat, matKey, solveSession, type MatDetection, type SolvedSession } from './pose';
+import { MATS, matById, uniqueMat, type MatId, type MatLayout } from './mat';
+import { MarkerChoice } from '../core/markerChoice';
+import { uniqueCode, uniqueSlot, type MarkerMode } from '../core/markers';
 import { FAIR_MM, GOOD_MM, SceneView, drawCoverage, quality, type Colors } from './view';
 import { colorCopy, sharpestFrames } from './video';
 import { carve, measure } from './carve';
@@ -47,6 +49,7 @@ langSelect.addEventListener('change', () => {
   lang = langSelect.value as Lang;
   storageSet('lang', lang);
   applyLang();
+  showMarkers();
 });
 
 const scene = new SceneView($<HTMLCanvasElement>('scene'), colors);
@@ -60,6 +63,7 @@ for (const r of matRadios) {
   r.addEventListener('change', () => {
     storageSet('mat3d', selectedMat());
     $('round-hint').hidden = selectedMat() === 'rect';
+    showMarkers();
   });
 }
 $('round-hint').hidden = selectedMat() === 'rect';
@@ -69,9 +73,45 @@ function selectedMat(): MatId {
   return MATS.find((m) => m.id === v)?.id ?? 'rect';
 }
 
+// Fixed markers serve every scan; unique ones are drawn for one project (see core/markers.ts).
+const markerChoice = new MarkerChoice('markers3d');
+const markerCount = () => matById(selectedMat()).markers.length;
+for (const r of document.querySelectorAll<HTMLInputElement>('input[name="markers"]')) {
+  r.checked = r.value === markerChoice.mode;
+  r.addEventListener('change', () => {
+    markerChoice.mode = r.value as MarkerMode;
+    showMarkers();
+  });
+}
+$('unique-new').addEventListener('click', () => {
+  markerChoice.renew(selectedMat(), markerCount());
+  showMarkers();
+});
+
+function showMarkers() {
+  const mode = markerChoice.mode;
+  $('markers-hint').textContent = t(`markers.${mode}.hint`);
+  $('unique-box').hidden = mode === 'fixed';
+  $('unique-code').textContent = mode === 'unique' ? t('markers.code', { code: markerChoice.code(selectedMat(), markerCount())! }) : '';
+}
+showMarkers();
+
 function matFile(): File {
   const mat = selectedMat();
-  return new File([matPdf(mat, lang) as BlobPart], matPdfName(mat, lang), { type: 'application/pdf' });
+  const ids = markerChoice.ids(mat, markerCount());
+  const code = ids && uniqueCode(ids);
+  return new File([matPdf(mat, lang, ids) as BlobPart], matPdfName(mat, lang, code), { type: 'application/pdf' });
+}
+
+/** The mat in the views; for a unique one, with the marker ids read across all of them. */
+function sessionMat(): MatLayout {
+  const d0 = shots[0].det;
+  const base = matById(d0.matId);
+  if (!d0.unique) return base;
+  const n = base.markers.length;
+  const ids: (number | undefined)[] = new Array(n);
+  for (const s of shots) for (const id of s.det.markerIds) ids[uniqueSlot(id, n)] = id;
+  return uniqueMat(base, ids);
 }
 const shareButton = $<HTMLButtonElement>('share-mat');
 shareButton.hidden = !navigator.canShare?.({ files: [matFile()] });
@@ -232,7 +272,7 @@ async function buildModel() {
   const progress = $<HTMLProgressElement>('progress-model');
   progress.hidden = false;
   try {
-    const mat = matById(shots[0].det.matId);
+    const mat = sessionMat();
     const views = shots.map((s, i) => ({
       image: s.color,
       pose: solved!.photos[i].pose,
@@ -301,10 +341,10 @@ async function solveAndRender() {
   setStatus(() => t('status.solving'));
   await nextFrame();
   // Only the mat seen in most views counts: a stray view of the other mat is left out.
-  const counts = new Map<MatId, number>();
-  for (const s of shots) counts.set(s.det.matId, (counts.get(s.det.matId) ?? 0) + 1);
+  const counts = new Map<string, number>();
+  for (const s of shots) counts.set(matKey(s.det), (counts.get(matKey(s.det)) ?? 0) + 1);
   const main = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
-  shots = shots.filter((s) => s.det.matId === main);
+  shots = shots.filter((s) => matKey(s.det) === main);
   solved = shots.length ? solveSession(shots.map((s) => s.det)) : null;
   setStatus(solved ? () => t('status.done', { count: shots.length }) : null);
   render();
@@ -343,7 +383,12 @@ function render() {
   });
 
   const d0 = shots[0].det;
-  scene.set(matById(d0.matId), photos, { width: d0.width, height: d0.height, focal: solved.focal });
+  const mat = sessionMat();
+  if (d0.unique) {
+    const ids = mat.markers.map((m) => m.id);
+    $('summary').textContent += ` ${ids.every((id) => id >= 0) ? t('result.unique', { code: uniqueCode(ids) }) : t('result.uniquePartial')}`;
+  }
+  scene.set(mat, photos, { width: d0.width, height: d0.height, focal: solved.focal });
   drawCoverage($<HTMLCanvasElement>('coverage'), photos, colors());
 
   const table = $<HTMLTableElement>('table');

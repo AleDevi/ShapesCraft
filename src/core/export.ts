@@ -162,7 +162,8 @@ export function pngDpi(widthMm: number, heightMm: number, maxPixels = 16_000_000
 }
 
 /** File name for an export, with a timestamp so repeated downloads don't overwrite each other. */
-export function exportName(format: Format, date = new Date()): string {
+/** File name of an export; `code`, the project code of a unique frame, keeps the files of one project together. */
+export function exportName(format: Format, date = new Date(), code?: string): string {
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
-  return `shapescraft-${local.toISOString().slice(0, 16).replace(/[-:T]/g, '')}.${format}`;
+  return `shapescraft-${code ? `${code}-` : ''}${local.toISOString().slice(0, 16).replace(/[-:T]/g, '')}.${format}`;
 }

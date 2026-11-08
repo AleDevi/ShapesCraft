@@ -31,8 +31,8 @@ const unit = (a: Vec3): Vec3 => {
 };
 
 /** A camera at `c` (mat mm, z into the table) looking at the mat centre, and its photo. */
-export function shoot(c: Vec3, f: number, width: number, height: number, matId: MatId = 'rect'): Gray {
-  const mat = matById(matId);
+export function shoot(c: Vec3, f: number, width: number, height: number, matId: MatId | MatLayout = 'rect'): Gray {
+  const mat = typeof matId === 'string' ? matById(matId) : matId;
   const target: Vec3 = [mat.center.x, mat.center.y, 0];
   const z = unit(sub(target, c));
   const x = unit(cross(z, [0, 0, -1]));

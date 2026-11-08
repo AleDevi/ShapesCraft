@@ -61,6 +61,18 @@
           <span data-i18n="frame.format"></span>
           <select id="frame"></select>
         </label>
+        <div class="segmented" role="radiogroup" aria-labelledby="markers-label">
+          <span id="markers-label" data-i18n="markers.title"></span>
+          <div>
+            <label><input type="radio" name="markers" value="fixed" checked /> <span data-i18n="markers.fixed"></span></label>
+            <label><input type="radio" name="markers" value="unique" /> <span data-i18n="markers.unique"></span></label>
+          </div>
+        </div>
+        <p id="markers-hint" class="hint"></p>
+        <div id="unique-box" class="unique-box" hidden>
+          <strong id="unique-code"></strong>
+          <button id="unique-new" type="button" class="secondary" data-i18n="markers.new"></button>
+        </div>
         <div class="buttons">
           <button id="share-frame" type="button" data-i18n="frame.share" hidden></button>
           <button id="download-frame" type="button" class="secondary" data-i18n="frame.download"></button>

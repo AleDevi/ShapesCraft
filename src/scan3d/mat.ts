@@ -19,6 +19,8 @@ export interface MatMarker { id: number; corners: Point[] }
 
 export interface MatLayout {
   id: MatId;
+  /** Unique mats only: tells this printed sheet apart from the fixed mat of the same shape. */
+  key?: string;
   /** Printed sheet. */
   width: number;
   height: number;
@@ -108,6 +110,16 @@ export function matById(id: MatId): MatLayout {
   return MATS.find((m) => m.id === id)!;
 }
 
+/**
+ * A mat of the same shape as `base` with unique marker ids (see core/markers.ts), one
+ * per position. A position whose id is not known (never seen in a video) is left as
+ * -1 and drawn as a plain black square.
+ */
+export function uniqueMat(base: MatLayout, ids: readonly (number | undefined)[]): MatLayout {
+  const markers = base.markers.map((m, i) => ({ id: ids[i] ?? -1, corners: m.corners }));
+  return { ...base, key: `${base.id}:${markers.map((m) => m.id).join(',')}`, markers };
+}
+
 /** The mat a marker id belongs to, if any. */
 export function matOfMarker(id: number): MatId | null {
   return MATS.find((m) => m.markers.some((k) => k.id === id))?.id ?? null;
@@ -126,15 +138,19 @@ function outlineOps(points: Point[], width: number): FrameOp[] {
   });
 }
 
-export interface MatLabels { title: string; scale: string; place: string; cut?: string }
+export interface MatLabels { title: string; scale: string; place: string; cut?: string;
+  /** Unique mats: the line with the project code, and the bare code. */
+  code?: string; codeOnly?: string;
+}
 
 /** The printable mat as drawing primitives, for the PDF. */
 export function matDrawing(mat: MatLayout, labels: MatLabels): FrameOp[] {
   const ops: FrameOp[] = [];
   for (const m of mat.markers) {
+    ops.push({ kind: 'poly', points: m.corners, gray: 0 });
+    if (m.id < 0) continue;
     const cells = markerCells(m.id);
     const n = cells.length;
-    ops.push({ kind: 'poly', points: m.corners, gray: 0 });
     cells.forEach((row, cy) =>
       row.forEach((v, cx) => {
         if (!v) return;
@@ -174,6 +190,12 @@ export function matDrawing(mat: MatLayout, labels: MatLabels): FrameOp[] {
   ops.push({ kind: 'text', x: mat.width / 2, y: ry + 8, size: 3, body: labels.scale });
   const titleY = mat.round ? c.y - mat.round.cut - 10 : Math.min(...mat.area.map((p) => p.y)) + 8;
   ops.push({ kind: 'text', x: mat.width / 2, y: titleY, size: 3.2, body: labels.title });
+  if (labels.code) ops.push({ kind: 'text', x: mat.width / 2, y: titleY + 4.5, size: 2.8, body: labels.code });
+  // The title is cut away with the paper around a round mat: the code is printed inside the ring too.
+  if (mat.round && labels.codeOnly) {
+    const { area, ring, marker } = mat.round;
+    ops.push({ kind: 'text', x: c.x, y: c.y + (area + ring - marker / 2) / 2 + 1, size: 2.4, body: labels.codeOnly });
+  }
   if (mat.round && labels.cut) ops.push({ kind: 'text', x: mat.width / 2, y: ry + 15, size: 2.8, body: labels.cut });
   return ops;
 }
