@@ -34,11 +34,12 @@ The app is available in English and Italian: it follows the phone's language, an
 
 ## How to use it
 
-1. Open the app and tap Start. Pick the format (A4 or A3) and get the frame as a PDF: share it from the phone (email, chat, Drive, a printer app), download it, or copy its link to open it on a computer. Print it at 100%: the reference line at the bottom must measure 100 mm.
-2. For a rigid frame, glue it to card or thin plastic and cut along the black lines (outer edge and central window). Or use the sheet as it is and draw inside the window.
-3. Lay the frame over the drawing (dark marker on white paper) or the object, which must sit inside the window.
-4. Take the photo with the whole frame in view. The app finds the markers, corrects the perspective and traces the outlines.
-5. Adjust threshold, straightening and smoothing, then pick the format and download or share the file: SVG, DXF (R12), PDF at real size or PNG at 300 dpi, all in millimetres. Or pick **STL** to turn the shape into a solid for 3D printing: choose the thickness and, if you like, rounded top edges.
+1. Get the frame you need from above (for 2d or 3d scan, of the desired scale) and print it on the proper paper size. Print it at 100%: the reference line at the bottom must measure 100 mm. Alternatively, you can get the frame from the app.
+2. Open the app and tap Start. If you didn't already, pick the format (A4 or A3) and get the frame as a PDF: share it from the phone (email, chat, Drive, a printer app), download it, or copy its link to open it on a computer. Print it at 100% (as above).
+3. For a rigid frame, glue it to card or thin plastic and cut along the black lines (outer edge and central window). Or use the sheet as it is and draw inside the window.
+4. Lay the frame over the drawing (dark marker on white paper) or the object, which must sit inside the window.
+5. Take the photo with the whole frame in view. The app finds the markers, corrects the perspective and traces the outlines.
+6. Adjust threshold, straightening and smoothing, then pick the format and download or share the file: SVG, DXF (R12), PDF at real size or PNG at 300 dpi, all in millimetres. Or pick **STL** to turn the shape into a solid for 3D printing: choose the thickness and, if you like, rounded top edges.
 
 ## How it works
 
