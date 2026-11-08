@@ -5,7 +5,7 @@ name: Frame PDFs release
 on:
   push:
     branches: [main]
-    paths: ['frames/**']
+    paths: ['frames/**', '.github/workflows/frames.yml']
   workflow_dispatch:
 
 permissions:
@@ -36,10 +36,11 @@ jobs:
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
+          NOTES: |
+            PDFs of the ShapesCraft 2D frames (A4, A3, mini 10 × 10 cm) and 3D mats (rectangular A4, round A4, A3 and small), in English (frame-*, mat-*) and Italian (cornice-*, tappetino-*). Print at 100% (actual size): the 100 mm reference line must measure 100 mm.
+
+            I PDF delle cornici 2D (A4, A3, mini 10 × 10 cm) e dei tappetini 3D (rettangolare A4, tondo A4, A3 e piccolo) di ShapesCraft, in inglese (frame-*, mat-*) e italiano (cornice-*, tappetino-*). Stampa al 100% (dimensioni reali): la linea di riferimento da 100 mm deve misurare 100 mm.
         run: |
           gh release delete frames --yes --cleanup-tag || true
           gh release create frames frames/*.pdf --target "$GITHUB_SHA" --latest \
-            --title "Printable frames and mats / Cornici e tappetini da stampare" \
-            --notes "PDFs of the ShapesCraft 2D frames (A4, A3, mini 10 × 10 cm) and 3D mats (rectangular A4, round A4, A3 and small), in English (frame-*, mat-*) and Italian (cornice-*, tappetino-*). Print at 100 % (actual size): the 100 mm reference line must measure 100 mm.
-
-I PDF delle cornici 2D (A4, A3, mini 10 × 10 cm) e dei tappetini 3D (rettangolare A4, tondo A4, A3 e piccolo) di ShapesCraft, in inglese (frame-*, mat-*) e italiano (cornice-*, tappetino-*). Stampa al 100 % (dimensioni reali): la linea di riferimento da 100 mm deve misurare 100 mm."
+            --title "Printable frames and mats / Cornici e tappetini da stampare" --notes "$NOTES"
