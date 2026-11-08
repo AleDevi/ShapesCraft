@@ -12,8 +12,12 @@ export interface ExtrudeOptions {
 
 /** Most grid cells the distance field may use, to keep phones within memory and time. */
 const MAX_CELLS = 2_000_000;
-/** Size of the distance-field cells, mm: the photo is traced at 0.2 mm per pixel too. */
-const CELL_MM = 0.2;
+/** Size of the distance-field cells, mm: fine enough for smooth insets, coarse enough to stay quick. */
+const CELL_MM = 0.1;
+/** Insets smaller than this (mm²: crumbs where a thin part ends) are left out: too small to print. */
+const MIN_LOOP_AREA_MM2 = 0.3;
+/** Smallest inset of the rounded edge, mm (and at least one grid cell), so that it stays clear of the exact outline. */
+const MIN_INSET_MM = 0.08;
 /** Largest distance of the mesh from the exact outline, mm: far below what a printer shows. */
 const MAX_TOLERANCE = 0.04;
 
@@ -56,22 +60,33 @@ export function extrude(loops: Point[][], opts: ExtrudeOptions): Mesh {
   const sd = signedDistance(shapes, x0, y0, res, w, h, far);
 
   // Levels of the rounded edge, from the wall top (θ = 0) to the flat top (θ = 90°).
-  const steps = r > 0 ? Math.min(16, Math.max(3, Math.ceil((r * Math.PI) / 2 / 0.3))) : 0;
-  const levels: { d: number; z: number }[] = [];
-  for (let k = 0; k <= steps; k++) {
-    const a = steps ? (k / steps) * (Math.PI / 2) : 0;
-    levels.push({ d: r * (1 - Math.cos(a)), z: T - r + r * Math.sin(a) });
+  // About 0.25 mm of arc per level. The lowest insets would sit a hair inside the outline
+  // (the first is 0.01 mm in for r = 1 mm): skipping those keeps the levels apart.
+  const arcs = r > 0 ? Math.min(16, Math.max(4, Math.ceil((r * Math.PI) / 2 / 0.25))) : 0;
+  const levels: { d: number; z: number }[] = [{ d: 0, z: T - r }];
+  for (let k = 1; k <= arcs; k++) {
+    const a = (k / arcs) * (Math.PI / 2);
+    const d = r * (1 - Math.cos(a));
+    if (d >= Math.max(MIN_INSET_MM, res) || k === arcs) levels.push({ d, z: T - r + r * Math.sin(a) });
   }
+  const steps = levels.length - 1;
   // Each level is simplified by less than half the gap to its neighbours, so levels never cross.
   const gap = (k: number) => (k < 0 || k >= steps ? Infinity : levels[k + 1].d - levels[k].d);
   const tol = (k: number) => Math.min(MAX_TOLERANCE, gap(k - 1) / 2.5, gap(k) / 2.5);
   // isoContours treats values below the level as inside: inside the inset means sd > d.
   const field = { width: w, height: h, data: sd.map((v) => -v) };
-  const contours = levels.map(({ d }, k) =>
+  const fieldLoops = (d: number, k: number) =>
     isoContours(field, -d)
-      .map((l) => clean(l.map((p) => ({ x: x0 + p.x * res, y: y0 + p.y * res })), tol(k)))
-      .filter((l) => l.length >= 3 && Math.abs(signedArea(l)) > res * res * 0.5),
-  );
+      .map((l) => l.map((p) => ({ x: x0 + p.x * res, y: y0 + p.y * res })))
+      .map((l) => densify(clean(l, tol(k))))
+      .filter((l) => l.length >= 3 && Math.abs(signedArea(l)) > MIN_LOOP_AREA_MM2);
+  // The outline itself is the traced shape, exactly; only the insets come from the field.
+  // Shapes that touch or overlap don't make one clean outline, though: then the field's
+  // outline, which joins them, is used instead.
+  const fieldOutline = fieldLoops(0, 0);
+  const clean_ = fieldOutline.length === shapes.length && !crossing(shapes);
+  const outline = clean_ ? (steps ? shapes.map(densify) : shapes) : fieldOutline;
+  const contours = levels.map(({ d }, k) => (k === 0 ? outline : fieldLoops(d, k)));
 
   // Centre on the base outline.
   const base = contours[0];
@@ -103,12 +118,45 @@ export function extrude(loops: Point[][], opts: ExtrudeOptions): Mesh {
       tris.push(lo[j], lo[k], hi[k], lo[j], hi[k], hi[j]);
     }
   }
-  for (let k = 0; k < steps; k++) {
-    cap([...oriented[k], ...oriented[k + 1]], [...levelRings[k], ...levelRings[k + 1]], tris, true);
-  }
+  for (let k = 0; k < steps; k++) band(oriented[k], levelRings[k], oriented[k + 1], levelRings[k + 1], tris);
   cap(oriented[steps], levelRings[steps], tris, true);
 
+  closeGaps(tris);
   return { positions: new Float32Array(pos), triangles: new Uint32Array(tris) };
+}
+
+/**
+ * Last safety net for a printable file: earcut can, on rare near-degenerate input, leave
+ * a tiny gap. Every edge with no partner running the other way is chained into the
+ * gap's outline, which is then filled with a fan of triangles.
+ */
+function closeGaps(tris: number[]) {
+  const edges = new Map<string, number>();
+  const key = (a: number, b: number) => `${a},${b}`;
+  for (let k = 0; k < tris.length; k += 3)
+    for (let e = 0; e < 3; e++) {
+      const id = key(tris[k + e], tris[k + ((e + 1) % 3)]);
+      edges.set(id, (edges.get(id) ?? 0) + 1);
+    }
+  // Open edge a → b: the gap's outline runs b → a.
+  const next = new Map<number, number>();
+  for (const [id, count] of edges) {
+    const [a, b] = id.split(',').map(Number);
+    if (count === 1 && !edges.has(key(b, a)) && !next.has(b)) next.set(b, a);
+  }
+  while (next.size) {
+    const [start] = next.keys();
+    const loop: number[] = [];
+    let v: number | undefined = start;
+    while (v !== undefined && next.has(v) && loop.length <= next.size + 1) {
+      loop.push(v);
+      const w: number = next.get(v)!;
+      next.delete(v);
+      v = w;
+    }
+    if (v !== start || loop.length < 3) continue;
+    for (let i = 1; i + 1 < loop.length; i++) tris.push(loop[0], loop[i], loop[i + 1]);
+  }
 }
 
 /**
@@ -165,6 +213,63 @@ function signedDistance(loops: Point[][], x0: number, y0: number, res: number, w
   // Flip the sign so inside is positive.
   for (let k = 0; k < dist.length; k++) dist[k] = -dist[k];
   return dist;
+}
+
+/** Whether any two sides of the loops cross or touch (sides of a loop next to each other aside). */
+function crossing(loops: Point[][]): boolean {
+  const CELL = 2;
+  const cells = new Map<number, number[]>();
+  const sides: [Point, Point, number, number][] = [];
+  loops.forEach((l, li) => l.forEach((a, i) => sides.push([a, l[(i + 1) % l.length], li, i])));
+  const cell = (v: number) => Math.floor(v / CELL);
+  const orient = (a: Point, b: Point, c: Point) => Math.sign((b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x));
+  for (let s = 0; s < sides.length; s++) {
+    const [a, b, li, i] = sides[s];
+    const seen = new Set<number>();
+    for (let cy = cell(Math.min(a.y, b.y)); cy <= cell(Math.max(a.y, b.y)); cy++)
+      for (let cx = cell(Math.min(a.x, b.x)); cx <= cell(Math.max(a.x, b.x)); cx++) {
+        const key = (cx + 32768) * 65536 + (cy + 32768);
+        const list = cells.get(key) ?? [];
+        for (const o of list) {
+          if (seen.has(o)) continue;
+          seen.add(o);
+          const [c, d, lo, io] = sides[o];
+          const n = loops[li].length;
+          if (lo === li && (Math.abs(io - i) === 1 || Math.abs(io - i) === n - 1)) continue;
+          const o1 = orient(a, b, c), o2 = orient(a, b, d), o3 = orient(c, d, a), o4 = orient(c, d, b);
+          if (o1 !== o2 && o3 !== o4) return true;
+          // Collinear overlap counts as touching.
+          if (o1 === 0 && o2 === 0 && Math.max(Math.min(a.x, b.x), Math.min(c.x, d.x)) <= Math.min(Math.max(a.x, b.x), Math.max(c.x, d.x)) && Math.max(Math.min(a.y, b.y), Math.min(c.y, d.y)) <= Math.min(Math.max(a.y, b.y), Math.max(c.y, d.y))) return true;
+        }
+        list.push(s);
+        cells.set(key, list);
+      }
+  }
+  return false;
+}
+
+/** Squared distance from p to the segment a–b. */
+function segment2(p: Point, a: Point, b: Point): number {
+  const dx = b.x - a.x, dy = b.y - a.y, len2 = dx * dx + dy * dy;
+  const t = len2 > 0 ? Math.min(1, Math.max(0, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2)) : 0;
+  return (p.x - a.x - t * dx) ** 2 + (p.y - a.y - t * dy) ** 2;
+}
+
+/** Largest fold (twice the area, mm²) a strip may have where both ways fold, as at sharp tips. */
+const MAX_FOLD = 0.05;
+
+/** Longest side of a level of the rounded edge, mm: alike levels stitch into an even strip. */
+const MAX_SIDE_MM = 0.5;
+
+/** Splits long sides so that every level has about the same spacing of points. */
+function densify(loop: Point[]): Point[] {
+  const out: Point[] = [];
+  for (let i = 0; i < loop.length; i++) {
+    const a = loop[i], b = loop[(i + 1) % loop.length];
+    const n = Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / MAX_SIDE_MM);
+    for (let k = 0; k < n; k++) out.push({ x: a.x + ((b.x - a.x) * k) / n, y: a.y + ((b.y - a.y) * k) / n });
+  }
+  return out;
 }
 
 /** Drops repeated points and points on straight runs. */
@@ -235,28 +340,156 @@ function orient(loops: Point[][]): Point[][] {
  * triangles then form a slope between them.
  */
 function cap(loops: Point[][], ids: number[][], tris: number[], up: boolean) {
-  for (const { outer, holes } of regions(loops)) {
-    const flat: number[] = [];
-    const index: number[] = [];
-    const holeStarts: number[] = [];
-    for (const i of [outer, ...holes]) {
-      if (i !== outer) holeStarts.push(index.length);
-      for (let k = 0; k < loops[i].length; k++) {
-        flat.push(loops[i][k].x, loops[i][k].y);
-        index.push(ids[i][k]);
-      }
-    }
-    const t = earcut(flat, holeStarts);
-    // earcut winds all triangles of one call alike: find which way from their total area.
-    let area = 0;
-    for (let k = 0; k < t.length; k += 3) {
-      const a = t[k] * 2, b = t[k + 1] * 2, c = t[k + 2] * 2;
-      area += (flat[b] - flat[a]) * (flat[c + 1] - flat[a + 1]) - (flat[c] - flat[a]) * (flat[b + 1] - flat[a + 1]);
-    }
-    const flip = area > 0 !== up;
-    for (let k = 0; k < t.length; k += 3) {
-      if (flip) tris.push(index[t[k]], index[t[k + 2]], index[t[k + 1]]);
-      else tris.push(index[t[k]], index[t[k + 1]], index[t[k + 2]]);
+  for (const region of regions(loops)) capRegion(loops, ids, region, tris, up);
+}
+
+/**
+ * The sloped surface between two neighbouring levels of the rounded edge (loops of the
+ * lower level `a`, of the upper level `b`). Where an outline and its inset pair up, the
+ * strip between them is stitched edge to edge, so the slope stays even and smooth. Where
+ * the shape changes between levels (a thin part ends, two parts split) the area is
+ * triangulated as a whole.
+ */
+function band(a: Point[][], aIds: number[][], b: Point[][], bIds: number[][], tris: number[]) {
+  const loops = [...a, ...b];
+  const ids = [...aIds, ...bIds];
+  for (const region of regions(loops)) {
+    const members = [region.outer, ...region.holes];
+    const lower = members.filter((i) => i < a.length);
+    const upper = members.filter((i) => i >= a.length);
+    const strip = lower.length === 1 && upper.length === 1 ? stitch(loops[lower[0]], ids[lower[0]], loops[upper[0]], ids[upper[0]]) : null;
+    if (strip) tris.push(...strip);
+    else capRegion(loops, ids, region, tris, true);
+  }
+}
+
+/**
+ * Joins loop A to loop B (its inset, running the same way, on A's left) by a strip of
+ * triangles, walking both loops together one step at a time.
+ * Returns null when the loops don't pair up that way (part of the shape ends between
+ * the two levels): the strip would fold over itself there.
+ */
+function stitch(A0: Point[], aIds0: number[], B: Point[], bIds: number[]): number[] | null {
+  const tris: number[] = [];
+  const n = A0.length, m = B.length;
+  // Start A at the side holding the foot of B's first point, so both start side by side.
+  let k0 = 0;
+  {
+    let best = Infinity;
+    for (let k = 0; k < n; k++) {
+      const d = segment2(B[0], A0[k], A0[(k + 1) % n]);
+      if (d < best) [best, k0] = [d, k];
     }
   }
+  const A = [...A0.slice(k0), ...A0.slice(0, k0)];
+  const aIds = [...aIds0.slice(k0), ...aIds0.slice(0, k0)];
+  const d2 = (p: Point, q: Point) => (p.x - q.x) ** 2 + (p.y - q.y) ** 2;
+  const Bp = (j: number) => B[j % m];
+  const bId = (j: number) => bIds[j % m];
+  const area = (p: Point, q: Point, r: Point) => (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x);
+  let i = 0, j = 0;
+  while (i < n || j < m) {
+    // A step along A (if any left) or along B, whichever makes the shorter new edge...
+    const stepA = i < n ? area(A[i], A[(i + 1) % n], Bp(j)) : -Infinity;
+    const stepB = j < m ? area(A[i % n], Bp(j + 1), Bp(j)) : -Infinity;
+    let alongA = j >= m || (i < n && d2(A[(i + 1) % n], Bp(j)) <= d2(A[i], Bp(j + 1)));
+    // ...but never one whose triangle folds over when the other one doesn't,
+    if (stepA > 0 !== stepB > 0) alongA = stepA > 0;
+    // and the lesser fold when both do (a hair at a sharp tip). A real fold means
+    // these levels don't pair up here.
+    else if (stepA <= 0) alongA = stepA >= stepB;
+    if ((alongA ? stepA : stepB) < -MAX_FOLD) return null;
+    if (alongA) {
+      tris.push(aIds[i], aIds[(i + 1) % n], bId(j));
+      i++;
+    } else {
+      tris.push(aIds[i % n], bId(j + 1), bId(j));
+      j++;
+    }
+  }
+  return tris;
+}
+
+function capRegion(loops: Point[][], ids: number[][], { outer, holes }: Region, tris: number[], up: boolean) {
+  const flat: number[] = [];
+  const index: number[] = [];
+  const rings: number[][] = [];
+  const holeStarts: number[] = [];
+  for (const i of [outer, ...holes]) {
+    if (i !== outer) holeStarts.push(index.length);
+    const ring: number[] = [];
+    for (let k = 0; k < loops[i].length; k++) {
+      ring.push(index.length);
+      flat.push(loops[i][k].x, loops[i][k].y);
+      index.push(ids[i][k]);
+    }
+    rings.push(ring);
+  }
+  const t = restoreDropped(earcut(flat, holeStarts), rings, flat);
+  // earcut winds all triangles of one call alike: find which way from their total area.
+  let area = 0;
+  for (let k = 0; k < t.length; k += 3) {
+    const a = t[k] * 2, b = t[k + 1] * 2, c = t[k + 2] * 2;
+    area += (flat[b] - flat[a]) * (flat[c + 1] - flat[a + 1]) - (flat[c] - flat[a]) * (flat[b + 1] - flat[a + 1]);
+  }
+  const flip = area > 0 !== up;
+  for (let k = 0; k < t.length; k += 3) {
+    if (flip) tris.push(index[t[k]], index[t[k + 2]], index[t[k + 1]]);
+    else tris.push(index[t[k]], index[t[k + 1]], index[t[k + 2]]);
+  }
+}
+
+/**
+ * earcut skips points that lie exactly on a straight run of their loop. The surface next
+ * door still has an edge to each such point, so the mesh would be open there: split the
+ * triangle that spans the skipped points into a fan through them.
+ */
+function restoreDropped(t: number[], rings: number[][], flat: number[]): number[] {
+  const out = t.slice();
+  const key = (a: number, b: number) => (a < b ? `${a},${b}` : `${b},${a}`);
+  const owner = new Map<string, number>();
+  const note = (k: number) => {
+    for (let e = 0; e < 3; e++) owner.set(key(out[k + e], out[k + ((e + 1) % 3)]), k);
+  };
+  for (let k = 0; k < out.length; k += 3) note(k);
+  for (const ring of rings) {
+    const n = ring.length;
+    for (let i = 0; i < n; i++) {
+      if (owner.has(key(ring[i], ring[(i + 1) % n]))) continue;
+      // Find the next point of the ring the triangles do reach from here.
+      let j = i + 2;
+      while (j - i < n && !owner.has(key(ring[i], ring[j % n]))) j++;
+      if (j - i >= n) continue;
+      const a = ring[i], c = ring[j % n];
+      // Only points on the straight line from a to c were skipped on purpose.
+      let straight = true;
+      for (let m = i + 1; m < j && straight; m++) {
+        const b = ring[m % n];
+        const cross = (flat[2 * c] - flat[2 * a]) * (flat[2 * b + 1] - flat[2 * a + 1]) - (flat[2 * c + 1] - flat[2 * a + 1]) * (flat[2 * b] - flat[2 * a]);
+        straight = Math.abs(cross) < 1e-9;
+      }
+      if (!straight) continue;
+      const k = owner.get(key(a, c))!;
+      const tri = out.slice(k, k + 3);
+      const x = tri.find((v) => v !== a && v !== c)!;
+      // Keep the triangle's winding: walk a → c the way the triangle does.
+      const forward = tri.indexOf(c) === (tri.indexOf(a) + 1) % 3;
+      const chain = [a];
+      for (let m = i + 1; m < j; m++) chain.push(ring[m % n]);
+      chain.push(c);
+      const fan: number[] = [];
+      for (let m = 0; m + 1 < chain.length; m++) {
+        if (forward) fan.push(chain[m], chain[m + 1], x);
+        else fan.push(chain[m + 1], chain[m], x);
+      }
+      out.splice(k, 3, ...fan.slice(0, 3));
+      note(k);
+      for (let f = 3; f < fan.length; f += 3) {
+        out.push(fan[f], fan[f + 1], fan[f + 2]);
+        note(out.length - 3);
+      }
+      i = j - 1;
+    }
+  }
+  return out;
 }

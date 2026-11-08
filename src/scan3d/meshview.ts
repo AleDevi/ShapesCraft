@@ -31,68 +31,84 @@ export class MeshView {
 
   draw() {
     const dpr = window.devicePixelRatio || 1;
-    const w = this.canvas.clientWidth;
-    const h = this.canvas.clientHeight;
-    this.canvas.width = Math.round(w * dpr);
-    this.canvas.height = Math.round(h * dpr);
+    const W = Math.round(this.canvas.clientWidth * dpr);
+    const H = Math.round(this.canvas.clientHeight * dpr);
+    this.canvas.width = W;
+    this.canvas.height = H;
     const ctx = this.canvas.getContext('2d')!;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, w, h);
+    ctx.clearRect(0, 0, W, H);
     const m = this.mesh;
-    if (!m || !m.triangles.length) return;
+    if (!m || !m.triangles.length || !W || !H) return;
 
+    // Turn about the middle of the model's bounding box.
     const p = m.positions;
-    let zMax = 0, r = 1;
-    for (let i = 0; i < p.length; i += 3) zMax = Math.max(zMax, p[i + 2]);
-    for (let i = 0; i < p.length; i += 3) r = Math.max(r, Math.hypot(p[i], p[i + 1], p[i + 2] - zMax / 2));
+    const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+    for (let i = 0; i < p.length; i += 3)
+      for (let k = 0; k < 3; k++) {
+        lo[k] = Math.min(lo[k], p[i + k]);
+        hi[k] = Math.max(hi[k], p[i + k]);
+      }
+    const mid = [0, 1, 2].map((k) => (lo[k] + hi[k]) / 2);
+    const r = Math.max(1, Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]) / 2);
     const cy = Math.cos(this.yaw), sy = Math.sin(this.yaw);
     const cp = Math.cos(this.pitch), sp = Math.sin(this.pitch);
+    const scale = (Math.min(W, H) / 2 / r) * 0.92;
     const n = p.length / 3;
-    // View space: X right, Y up, Z away from the viewer.
+    // Screen space in device pixels: X right, Y down, Z away from the viewer.
     const X = new Float32Array(n), Y = new Float32Array(n), Z = new Float32Array(n);
     for (let i = 0; i < n; i++) {
-      const x = p[i * 3], y = p[i * 3 + 1], z = p[i * 3 + 2] - zMax / 2;
+      const x = p[i * 3] - mid[0], y = p[i * 3 + 1] - mid[1], z = p[i * 3 + 2] - mid[2];
       const x1 = cy * x - sy * y;
       const y1 = sy * x + cy * y;
-      X[i] = x1;
-      Y[i] = cp * z + sp * y1;
+      X[i] = W / 2 + x1 * scale;
+      Y[i] = H / 2 - (cp * z + sp * y1) * scale;
       Z[i] = cp * y1 - sp * z;
     }
-    const scale = (Math.min(w, h) / 2 / r) * 0.9;
-    const t = m.triangles;
-    const count = t.length / 3;
-    const depth = new Float32Array(count);
-    const order = new Uint32Array(count);
-    for (let k = 0; k < count; k++) {
-      depth[k] = Z[t[k * 3]] + Z[t[k * 3 + 1]] + Z[t[k * 3 + 2]];
-      order[k] = k;
-    }
-    order.sort((a, b) => depth[b] - depth[a]);
 
-    const { fill } = this.colors();
-    const base = parseColor(fill);
-    for (const k of order) {
-      const a = t[k * 3], b = t[k * 3 + 1], c = t[k * 3 + 2];
-      const ux = X[b] - X[a], uy = Y[b] - Y[a], uz = Z[b] - Z[a];
-      const vx = X[c] - X[a], vy = Y[c] - Y[a], vz = Z[c] - Z[a];
+    // Flat shading with a depth buffer, so big flat faces and thin walls never paint over each other.
+    const image = ctx.createImageData(W, H);
+    const px = image.data;
+    const depth = new Float32Array(W * H).fill(Infinity);
+    const base = parseColor(this.colors().fill);
+    const t = m.triangles;
+    for (let k = 0; k < t.length; k += 3) {
+      const a = t[k], b = t[k + 1], c = t[k + 2];
+      const ax = X[a], ay = Y[a], bx = X[b], by = Y[b], cx = X[c], cy2 = Y[c];
+      const area = (bx - ax) * (cy2 - ay) - (by - ay) * (cx - ax);
+      // Screen y points down, so a triangle facing the viewer winds clockwise: area < 0.
+      if (area >= 0) continue;
+      // Normal in view space (y up) for the light.
+      const ux = (bx - ax) / scale, uy = -(by - ay) / scale, uz = Z[b] - Z[a];
+      const vx = (cx - ax) / scale, vy = -(cy2 - ay) / scale, vz = Z[c] - Z[a];
       let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
-      // View space is mirrored (Z points away), so the cross product comes out reversed.
       const l = -(Math.hypot(nx, ny, nz) || 1);
       nx /= l; ny /= l; nz /= l;
-      // Facing away from the viewer: hidden by the front faces.
-      if (nz > 0.05) continue;
       const light = 0.35 + 0.65 * Math.max(0, -0.35 * nx + 0.55 * ny - 0.75 * nz);
-      ctx.fillStyle = `rgb(${base.map((v) => Math.round(v * light)).join(',')})`;
-      ctx.strokeStyle = ctx.fillStyle;
-      ctx.lineWidth = 0.5;
-      ctx.beginPath();
-      ctx.moveTo(w / 2 + X[a] * scale, h / 2 - Y[a] * scale);
-      ctx.lineTo(w / 2 + X[b] * scale, h / 2 - Y[b] * scale);
-      ctx.lineTo(w / 2 + X[c] * scale, h / 2 - Y[c] * scale);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
+      const cr = base[0] * light, cg = base[1] * light, cb = base[2] * light;
+      const x0 = Math.max(0, Math.floor(Math.min(ax, bx, cx))), x1 = Math.min(W - 1, Math.ceil(Math.max(ax, bx, cx)));
+      const y0 = Math.max(0, Math.floor(Math.min(ay, by, cy2))), y1 = Math.min(H - 1, Math.ceil(Math.max(ay, by, cy2)));
+      const inv = 1 / area;
+      for (let y = y0; y <= y1; y++) {
+        const qy = y + 0.5;
+        for (let x = x0; x <= x1; x++) {
+          const qx = x + 0.5;
+          // Barycentric weights; all ≤ 0 inside (clockwise triangle, negative area).
+          const wa = ((bx - qx) * (cy2 - qy) - (by - qy) * (cx - qx)) * inv;
+          const wb = ((cx - qx) * (ay - qy) - (cy2 - qy) * (ax - qx)) * inv;
+          const wc = 1 - wa - wb;
+          if (wa < -1e-6 || wb < -1e-6 || wc < -1e-6) continue;
+          const z = wa * Z[a] + wb * Z[b] + wc * Z[c];
+          const i = y * W + x;
+          if (z >= depth[i]) continue;
+          depth[i] = z;
+          px[i * 4] = cr;
+          px[i * 4 + 1] = cg;
+          px[i * 4 + 2] = cb;
+          px[i * 4 + 3] = 255;
+        }
+      }
     }
+    ctx.putImageData(image, 0, 0);
   }
 }
 
