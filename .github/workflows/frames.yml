@@ -1,0 +1,45 @@
+name: Frame PDFs release
+
+# Keeps a "frames" release whose assets are the printable PDFs in frames/, so they can be
+# downloaded from the Releases page too. It runs when the PDFs change on main, or by hand.
+on:
+  push:
+    branches: [main]
+    paths: ['frames/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: frames-release
+  cancel-in-progress: true
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      # Needed to create the release and upload its files.
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # Regenerate with the app's own code and refuse to publish PDFs that drifted from it.
+      - run: npm run frames
+      - run: git diff --exit-code -- frames
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete frames --yes --cleanup-tag || true
+          gh release create frames frames/*.pdf --target "$GITHUB_SHA" --latest \
+            --title "Printable frames and mats / Cornici e tappetini da stampare" \
+            --notes "PDFs of the ShapesCraft 2D frames (A4, A3, mini 10 × 10 cm) and 3D mats (rectangular A4, round A4, A3 and small), in English (frame-*, mat-*) and Italian (cornice-*, tappetino-*). Print at 100 % (actual size): the 100 mm reference line must measure 100 mm.
+
+I PDF delle cornici 2D (A4, A3, mini 10 × 10 cm) e dei tappetini 3D (rettangolare A4, tondo A4, A3 e piccolo) di ShapesCraft, in inglese (frame-*, mat-*) e italiano (cornice-*, tappetino-*). Stampa al 100 % (dimensioni reali): la linea di riferimento da 100 mm deve misurare 100 mm."

@@ -10,6 +10,22 @@ No install, no sign-up: it runs in the browser on phone, tablet and computer.
 
 A web app (PWA) that turns a photo of a drawing or an object laid on a printed frame into a true-scale SVG vector, ready for a laser cutter, CNC or cutting plotter.
 
+## Download the frames
+
+Print them straight from here, no need to open the app. Print at 100% ("actual size", no "fit to page"): the reference line must measure 100 mm.
+
+| For | Sheet | English | Italian |
+|---|---|---|---|
+| 2D frame A4 | A4 | [PDF](https://github.com/AleDevi/ShapesCraft/raw/main/frames/frame-shapescraft-a4.pdf) | [PDF](https://github.com/AleDevi/ShapesCraft/raw/main/frames/cornice-shapescraft-a4.pdf) |
+| 2D frame A3 | A3 | [PDF](https://github.com/AleDevi/ShapesCraft/raw/main/frames/frame-shapescraft-a3.pdf) | [PDF](https://github.com/AleDevi/ShapesCraft/raw/main/frames/cornice-shapescraft-a3.pdf) |
+| 2D frame mini 10 × 10 cm | A4 | [PDF](https://github.com/AleDevi/ShapesCraft/raw/main/frames/frame-shapescraft-mini.pdf) | [PDF](https://github.com/AleDevi/ShapesCraft/raw/main/frames/cornice-shapescraft-mini.pdf) |
+| 3D mat, rectangular | A4 | [PDF](https://github.com/AleDevi/ShapesCraft/raw/main/frames/mat-3d-shapescraft-a4.pdf) | [PDF](https://github.com/AleDevi/ShapesCraft/raw/main/frames/tappetino-3d-shapescraft-a4.pdf) |
+| 3D mat, round Ø 196 mm | A4 | [PDF](https://github.com/AleDevi/ShapesCraft/raw/main/frames/mat-3d-round-shapescraft-a4.pdf) | [PDF](https://github.com/AleDevi/ShapesCraft/raw/main/frames/tappetino-3d-tondo-shapescraft-a4.pdf) |
+| 3D mat, round Ø 280 mm | A3 | [PDF](https://github.com/AleDevi/ShapesCraft/raw/main/frames/mat-3d-round-shapescraft-a3.pdf) | [PDF](https://github.com/AleDevi/ShapesCraft/raw/main/frames/tappetino-3d-tondo-shapescraft-a3.pdf) |
+| 3D mat, small round Ø 132 mm | A4 | [PDF](https://github.com/AleDevi/ShapesCraft/raw/main/frames/mat-3d-round-small-shapescraft.pdf) | [PDF](https://github.com/AleDevi/ShapesCraft/raw/main/frames/tappetino-3d-tondo-piccolo-shapescraft.pdf) |
+
+All of them are in the [`frames/`](frames) folder and, as a single download, in the [latest release](https://github.com/AleDevi/ShapesCraft/releases/latest). They are made by the app's own code (`npm run frames`), and a test checks they match it.
+
 ## Why a hummingbird
 
 A hummingbird hovers around a flower with extreme precision, holding perfectly still in mid-air and moving around it a little at a time. That is what you do with your phone in ShapesCraft: you hold it steady over the frame to get a sharp photo and, for the 3D scan, you circle slowly around the object, like a hummingbird around its flower.
@@ -44,6 +60,7 @@ npm install
 npm run dev     # local server, also reachable from a phone on the same network
 npm test        # tests on synthetic photos in perspective
 npm run build
+npm run frames  # regenerate the printable PDFs in frames/ after changing a frame or a mat
 ```
 
 To try it on a phone, run `npm run dev` and open the network address on the same Wi-Fi. Installing it as an app needs HTTPS: the `.github/workflows/pages.yml` workflow publishes the app to GitHub Pages on every push to `main` (in Settings → Pages choose "GitHub Actions" as the source).

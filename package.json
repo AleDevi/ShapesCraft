@@ -8,7 +8,8 @@
     "dev": "vite --host",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host",
-    "test": "vitest run"
+    "test": "vitest run",
+    "frames": "node scripts/frames.mjs"
   },
   "devDependencies": {
     "typescript": "^7.0.2",
