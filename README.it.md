@@ -22,7 +22,7 @@ L'app è in italiano e in inglese: segue la lingua del telefono e si può cambia
 2. Per una cornice rigida incollala su cartoncino o plastica sottile e ritaglia lungo le linee nere (bordo esterno e finestra centrale). In alternativa usa il foglio così com'è e disegna dentro la finestra.
 3. Appoggia la cornice sul disegno (pennarello scuro su carta bianca) o sull'oggetto, che deve stare dentro la finestra.
 4. Scatta la foto inquadrando tutta la cornice. L'app trova i marker, raddrizza la prospettiva e traccia i contorni.
-5. Regola soglia, raddrizzamento e levigatura, poi scegli il formato e scarica o condividi il file: SVG, DXF (R12), PDF in scala reale o PNG a 300 dpi, sempre in millimetri.
+5. Regola soglia, raddrizzamento e levigatura, poi scegli il formato e scarica o condividi il file: SVG, DXF (R12), PDF in scala reale o PNG a 300 dpi, sempre in millimetri. Oppure scegli **STL** per trasformare la sagoma in un solido da stampare in 3D: decidi lo spessore e, se vuoi, i bordi arrotondati in alto.
 
 ## Come funziona
 
@@ -33,7 +33,7 @@ L'app è in italiano e in inglese: segue la lingua del telefono e si può cambia
 - **Linea singola**: assottigliamento Zhang–Suen dell'inchiostro, scheletro diviso in rami tra estremi e incroci, rimozione dei rami spuri, estremi riallungati di mezzo tratto; i tracciati aperti escono come linee non chiuse nell'SVG.
 
 - **PDF della cornice**: un piccolo generatore interno trasforma lo stesso disegno della cornice SVG in un PDF vettoriale (Helvetica, WinAnsi). La build pubblica anche tutte le cornici in `frames/`, così un computer può aprirle da link.
-- **Esportazioni**: SVG e PDF mantengono le curve di Bézier; DXF R12 (una polilinea per forma, curve spezzate entro 0,02 mm, asse y verso l'alto) per CAD e CNC; PNG disegnato su canvas con i dpi scritti in un chunk `pHYs`, così si apre in scala reale.
+- **Esportazioni**: SVG e PDF mantengono le curve di Bézier; DXF R12 (una polilinea per forma, curve spezzate entro 0,02 mm, asse y verso l'alto) per CAD e CNC; PNG disegnato su canvas con i dpi scritti in un chunk `pHYs`, così si apre in scala reale. STL (da 2D a 3D): le forme chiuse sono estruse in un solido chiuso; i bordi arrotondati sono una pila di contorni rientrati presi da un unico campo di distanza con segno (così non si incrociano mai e le parti sottili restano semplicemente più basse), e le facce sono triangolate con [earcut](https://github.com/mapbox/earcut) (ISC).
 
 Tutto gira nel browser, nessun server.
 
@@ -58,4 +58,4 @@ Per provarla dal telefono basta `npm run dev` e aprire l'indirizzo di rete sulla
 
 ShapesCraft è distribuito con licenza [Apache 2.0](LICENSE) (`Apache-2.0`): puoi usarlo, modificarlo e ridistribuirlo, anche in prodotti commerciali e a codice chiuso, purché mantieni l'avviso di copyright, la licenza e il file [`NOTICE`](NOTICE). Le versioni pubblicate prima di questo cambio erano rilasciate con AGPL-3.0. Copyright © 2026 Alessandro Devigili.
 
-Il codice in `src/vendor/js-aruco2/` resta sotto la sua licenza originale (MIT, con parti derivate da OpenCV sotto licenza BSD): vedi [`src/vendor/js-aruco2/LICENSE.txt`](src/vendor/js-aruco2/LICENSE.txt).
+Il codice in `src/vendor/js-aruco2/` resta sotto la sua licenza originale (MIT, con parti derivate da OpenCV sotto licenza BSD): vedi [`src/vendor/js-aruco2/LICENSE.txt`](src/vendor/js-aruco2/LICENSE.txt). Il pacchetto [earcut](https://github.com/mapbox/earcut), incluso nell'app per l'esportazione STL, è sotto licenza ISC (Copyright (c) 2024, Mapbox). Entrambi i testi sono pubblicati con l'app in `THIRD-PARTY-NOTICES.txt`.

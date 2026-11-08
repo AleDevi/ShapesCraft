@@ -22,7 +22,7 @@ The app is available in English and Italian: it follows the phone's language, an
 2. For a rigid frame, glue it to card or thin plastic and cut along the black lines (outer edge and central window). Or use the sheet as it is and draw inside the window.
 3. Lay the frame over the drawing (dark marker on white paper) or the object, which must sit inside the window.
 4. Take the photo with the whole frame in view. The app finds the markers, corrects the perspective and traces the outlines.
-5. Adjust threshold, straightening and smoothing, then pick the format and download or share the file: SVG, DXF (R12), PDF at real size or PNG at 300 dpi, all in millimetres.
+5. Adjust threshold, straightening and smoothing, then pick the format and download or share the file: SVG, DXF (R12), PDF at real size or PNG at 300 dpi, all in millimetres. Or pick **STL** to turn the shape into a solid for 3D printing: choose the thickness and, if you like, rounded top edges.
 
 ## How it works
 
@@ -33,7 +33,7 @@ The app is available in English and Italian: it follows the phone's language, an
 - **Single line**: Zhang–Suen thinning of the ink, skeleton split into branches between ends and junctions, spurious branches removed, ends extended by half a stroke; the open paths are exported as unclosed lines in the SVG.
 
 - **Frame PDF**: a small built-in writer turns the same drawing as the SVG frame into a vector PDF (Helvetica, WinAnsi). The build also publishes every frame under `frames/`, so a computer can open it by link.
-- **Exports**: SVG and PDF keep the Bézier curves; DXF R12 (one polyline per shape, curves split into pieces within 0.02 mm, y pointing up) for CAD and CNC; PNG drawn on a canvas with its dpi written in a `pHYs` chunk so it opens at real size.
+- **Exports**: SVG and PDF keep the Bézier curves; DXF R12 (one polyline per shape, curves split into pieces within 0.02 mm, y pointing up) for CAD and CNC; PNG drawn on a canvas with its dpi written in a `pHYs` chunk so it opens at real size. STL (2D to 3D): the closed shapes are extruded into a closed solid; rounded edges are a stack of insets taken from one signed distance field (so they never cross and thin parts simply stay lower), and the faces are triangulated with [earcut](https://github.com/mapbox/earcut) (ISC).
 
 Everything runs in the browser, no server.
 
@@ -58,4 +58,4 @@ To try it on a phone, run `npm run dev` and open the network address on the same
 
 ShapesCraft is released under the [Apache License 2.0](LICENSE) (`Apache-2.0`): you can use, modify and redistribute it, also in commercial and closed-source products, as long as you keep the copyright notice, the license and the [`NOTICE`](NOTICE) file. Versions published before this change were released under AGPL-3.0. Copyright © 2026 Alessandro Devigili.
 
-The code in `src/vendor/js-aruco2/` keeps its original license (MIT, with parts derived from OpenCV under the BSD license): see [`src/vendor/js-aruco2/LICENSE.txt`](src/vendor/js-aruco2/LICENSE.txt).
+The code in `src/vendor/js-aruco2/` keeps its original license (MIT, with parts derived from OpenCV under the BSD license): see [`src/vendor/js-aruco2/LICENSE.txt`](src/vendor/js-aruco2/LICENSE.txt). The [earcut](https://github.com/mapbox/earcut) package, bundled into the app for the STL export, is under the ISC license (Copyright (c) 2024, Mapbox). Both texts are published with the app in `THIRD-PARTY-NOTICES.txt`.

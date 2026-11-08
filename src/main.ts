@@ -18,7 +18,10 @@ import {
   type Traced,
 } from './core/pipeline';
 import { boundingBox, exportArea, exportSvg, pathData } from './core/svg';
-import { FORMATS, MIME, exportDxf, exportName, exportPdf, pngDpi, pngWithDpi, type Format } from './core/export';
+import { FORMATS, MIME, exportDxf, exportName, exportPdf, flatten, pngDpi, pngWithDpi, type Format } from './core/export';
+import { extrude } from './core/extrude';
+import { stl, type Mesh } from './scan3d/mesh';
+import { MeshView } from './scan3d/meshview';
 
 /** Resolution of the straightened image: 0.2 mm per pixel. */
 const PX_PER_MM = 5;
@@ -46,6 +49,8 @@ const controls = {
   showPhoto: $<HTMLInputElement>('show-photo'),
   fill: [...document.querySelectorAll<HTMLInputElement>('input[name="fill"]')],
   format: [...document.querySelectorAll<HTMLInputElement>('input[name="format"]')],
+  thickness: $<HTMLInputElement>('thickness'),
+  round: $<HTMLInputElement>('round'),
 };
 
 interface Session {
@@ -56,6 +61,10 @@ interface Session {
   traced?: Traced;
 }
 let session: Session | null = null;
+/** The 3D-printing solid for the current shapes and settings, built once per change. */
+let solid: { key: string; mesh: Mesh | null } | null = null;
+let solidPending = 0;
+let stlView: MeshView | null = null;
 
 const langSelect = $<HTMLSelectElement>('lang');
 const savedLang = localStorageGet('lang');
@@ -92,9 +101,13 @@ for (const radio of controls.fill) {
   });
 }
 /** Thin single lines are open paths with no inside; widened ones are closed outlines. */
-const openLines = () => controls.centerline.checked && !(Number(controls.lineWidth.value) > 0);
+function openLines() {
+  return controls.centerline.checked && !(Number(controls.lineWidth.value) > 0);
+}
 /** Filled output applies to closed shapes only, so thin single lines turn it off. */
-const isFilled = () => !openLines() && controls.fill.some((r) => r.checked && r.value === 'filled');
+function isFilled() {
+  return !openLines() && controls.fill.some((r) => r.checked && r.value === 'filled');
+}
 
 // Welcome page and tool are two views; the hash lets the phone's back button return to the welcome page.
 const welcome = $('welcome');
@@ -188,6 +201,89 @@ for (const radio of controls.format) {
   radio.addEventListener('change', () => {
     localStorageSet('format', radio.value);
     updateOutputs();
+    render();
+    scheduleSolid();
+  });
+}
+
+// 2D to 3D: the traced shapes extruded into a solid for 3D printing.
+const DEFAULT_THICKNESS_MM = 3;
+const DEFAULT_ROUND_MM = 0;
+stlView = new MeshView($<HTMLCanvasElement>('stl-view'), () => {
+  const css = getComputedStyle(document.documentElement);
+  return { fill: css.getPropertyValue('--accent').trim() || '#1f6feb', edge: css.getPropertyValue('--border').trim() || '#d8dee4' };
+});
+const stlStatus = $<HTMLParagraphElement>('stl-status');
+for (const [el, key, fallback] of [
+  [controls.thickness, 'thickness', DEFAULT_THICKNESS_MM],
+  [controls.round, 'round', DEFAULT_ROUND_MM],
+] as const) {
+  const saved = Number(localStorageGet(key));
+  el.value = String(localStorageGet(key) !== null && Number.isFinite(saved) ? saved : fallback);
+  el.addEventListener('input', () => {
+    localStorageSet(key, el.value);
+    updateOutputs();
+    scheduleSolid();
+  });
+}
+
+function solidKey(): string {
+  return `${controls.thickness.value}|${controls.round.value}`;
+}
+
+/** Closed shapes as polygons, curves flattened finely enough for printing. */
+function solidLoops() {
+  return session?.traced?.shapes.filter((s) => s.closed).map((s) => flatten(s, 0.02)) ?? [];
+}
+
+function buildSolid(): Mesh | null {
+  const key = solidKey();
+  if (solid?.key === key) return solid.mesh;
+  const loops = solidLoops();
+  const mesh = loops.length
+    ? extrude(loops, { thicknessMm: Number(controls.thickness.value), roundMm: Number(controls.round.value) })
+    : null;
+  solid = { key, mesh: mesh?.triangles.length ? mesh : null };
+  return solid.mesh;
+}
+
+/** Rebuilds the 3D preview shortly after the last change, while STL is the chosen format. */
+function scheduleSolid() {
+  clearTimeout(solidPending);
+  if (format() !== 'stl' || !session?.traced) return;
+  if (solid?.key !== solidKey()) stlStatus.textContent = t('stl.working');
+  solidPending = window.setTimeout(showSolid, 150);
+}
+
+function showSolid() {
+  if (format() !== 'stl') return;
+  const mesh = buildSolid();
+  stlView?.set(mesh);
+  updateSolidStatus();
+}
+
+function updateSolidStatus() {
+  const mesh = solid?.key === solidKey() ? solid.mesh : null;
+  const traced = session?.traced;
+  const ready = !!mesh;
+  for (const id of ['download', 'share']) $<HTMLButtonElement>(id).disabled = format() === 'stl' && !ready;
+  if (!traced || solid?.key !== solidKey()) return;
+  if (!mesh) {
+    stlStatus.textContent = t(traced.shapes.some((s) => !s.closed) && !traced.shapes.some((s) => s.closed) ? 'stl.open' : 'stl.none');
+    return;
+  }
+  const p = mesh.positions;
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity, z1 = 0;
+  for (let i = 0; i < p.length; i += 3) {
+    x0 = Math.min(x0, p[i]); x1 = Math.max(x1, p[i]);
+    y0 = Math.min(y0, p[i + 1]); y1 = Math.max(y1, p[i + 1]);
+    z1 = Math.max(z1, p[i + 2]);
+  }
+  stlStatus.textContent = t('stl.size', {
+    w: (x1 - x0).toFixed(1),
+    h: (y1 - y0).toFixed(1),
+    t: z1.toFixed(1),
+    tris: (mesh.triangles.length / 3).toLocaleString(lang),
   });
 }
 
@@ -204,6 +300,11 @@ async function exportFile(): Promise<File | null> {
   if (f === 'svg') data = exportSvg(shapes, polygons, PADDING_MM, isFilled());
   else if (f === 'dxf') data = exportDxf(shapes, polygons, PADDING_MM);
   else if (f === 'pdf') data = exportPdf(shapes, polygons, PADDING_MM, isFilled()) as BlobPart;
+  else if (f === 'stl') {
+    const mesh = buildSolid();
+    if (!mesh) return null;
+    data = stl(mesh, 'ShapesCraft');
+  }
   else data = (await renderPng(shapes, polygons)) as BlobPart;
   return new File([data], exportName(f), { type: MIME[f] });
 }
@@ -307,7 +408,9 @@ function options(): TraceOptions {
 function retrace() {
   if (!session) return;
   session.traced = trace(session.prepared, session.rectified, options());
+  solid = null;
   render();
+  scheduleSolid();
 }
 
 function render() {
@@ -322,7 +425,7 @@ function render() {
   preview.innerHTML =
     `<svg viewBox="${area.x} ${area.y} ${area.w} ${area.h}" xmlns="http://www.w3.org/2000/svg">` +
     `<rect x="${area.x}" y="${area.y}" width="${area.w}" height="${area.h}" fill="#fff"/>${image}` +
-    `<g fill="${isFilled() ? 'rgba(28,33,40,0.85)' : 'rgba(31,111,235,0.12)'}" fill-rule="evenodd" stroke="#1f6feb" stroke-width="0.6" vector-effect="non-scaling-stroke">` +
+    `<g fill="${isFilled() || (format() === 'stl' && !openLines()) ? 'rgba(28,33,40,0.85)' : 'rgba(31,111,235,0.12)'}" fill-rule="evenodd" stroke="#1f6feb" stroke-width="0.6" vector-effect="non-scaling-stroke">` +
     // Tint the inside of closed outlines; single lines have no inside.
     `<path d="${shapes.filter((s) => s.closed).map((s) => pathData(s)).join(' ')}" stroke="none"/>${paths}</g></svg>`;
 
@@ -337,7 +440,6 @@ function render() {
 }
 
 function updateOutputs() {
-  for (const radio of controls.fill) radio.disabled = openLines();
   $('fill-hint').textContent = t(openLines() ? 'fill.lines' : 'fill.hint');
   $('linewidth-row').hidden = !controls.centerline.checked;
   const width = Number(controls.lineWidth.value);
@@ -355,6 +457,16 @@ function updateOutputs() {
     dpi = pngDpi(w, h);
   }
   $('format-hint').textContent = t(`format.${f}`, { dpi });
+  const stlMode = f === 'stl';
+  const wasHidden = $('stl-options').hidden;
+  $('stl-options').hidden = !stlMode;
+  // Shape fill doesn't apply to a solid.
+  for (const radio of controls.fill) radio.disabled = openLines() || stlMode;
+  const round = Math.min(Number(controls.round.value), Number(controls.thickness.value));
+  $<HTMLOutputElement>('thickness-out').value = `${Number(controls.thickness.value).toFixed(1)} mm`;
+  $<HTMLOutputElement>('round-out').value = round > 0 ? `${round.toFixed(1)} mm` : t('stl.off');
+  if (stlMode && wasHidden) stlView?.draw();
+  updateSolidStatus();
   $<HTMLOutputElement>('smooth-out').value = Number(controls.smooth.value) ? `${controls.smooth.value} mm` : t('smooth.off');
 }
 

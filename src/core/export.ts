@@ -4,7 +4,7 @@ import { exportArea } from './svg';
 import type { PathShape } from './trace';
 
 /** File formats the traced vector can be saved as. */
-export const FORMATS = ['svg', 'dxf', 'pdf', 'png'] as const;
+export const FORMATS = ['svg', 'dxf', 'pdf', 'png', 'stl'] as const;
 export type Format = (typeof FORMATS)[number];
 
 export const MIME: Record<Format, string> = {
@@ -12,6 +12,7 @@ export const MIME: Record<Format, string> = {
   dxf: 'image/vnd.dxf',
   pdf: 'application/pdf',
   png: 'image/png',
+  stl: 'model/stl',
 };
 
 /** Finite numbers only, rounded to 0.001 mm: broken coordinates can't produce broken files. */
