@@ -73,3 +73,18 @@ describe('3D model from silhouettes', () => {
     expect(measure(await carve(mat, circle('round', none)))).toBeNull();
   });
 });
+
+describe('colour models', () => {
+  it('tells two colour families apart', async () => {
+    const { fit, logLikelihood } = await import('../src/scan3d/colors');
+    const dark: number[] = [], red: number[] = [];
+    for (let i = 0; i < 600; i++) {
+      const n = () => (Math.sin(i * 12.9898) * 43758.5453) % 0.03;
+      dark.push(0.15 + n(), 0.14 - n(), 0.13 + n());
+      red.push(0.8 - n(), 0.2 + n(), 0.2 - n());
+    }
+    const a = fit(Float64Array.from(dark), 3), b = fit(Float64Array.from(red), 3);
+    expect(logLikelihood(a, 0.15, 0.14, 0.13)).toBeGreaterThan(logLikelihood(b, 0.15, 0.14, 0.13) + 10);
+    expect(logLikelihood(b, 0.8, 0.2, 0.2)).toBeGreaterThan(logLikelihood(a, 0.8, 0.2, 0.2) + 10);
+  });
+});

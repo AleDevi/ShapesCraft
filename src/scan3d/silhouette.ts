@@ -139,11 +139,18 @@ export function projection(v: View): Float64Array {
 const MIN_BRIGHTNESS = 0.55;
 const MAX_TINT = 0.16;
 
-/** What the table plane holds under each pixel: 0 nothing usable, 1 paper, 3 table. */
-const ON_PAPER = 1;
-const ON_TABLE = 3;
+/** Colour relative to the frame's paper (1, 1, 1 = paper) bright and neutral enough to be paper. */
+export function looksLikePaper(r: number, g: number, b: number): boolean {
+  const hi = Math.max(r, g, b), lo = Math.min(r, g, b);
+  return (r + g + b) / 3 >= MIN_BRIGHTNESS && (hi - lo) / Math.max(hi, 1e-6) <= MAX_TINT;
+}
+
+/** What the table plane holds under each pixel: 0 nothing usable, 1 paper, 2 ink, 3 table. */
+export const ON_PAPER = 1;
+export const ON_INK = 2;
+export const ON_TABLE = 3;
 /** Table that the object can't hide from this camera: what the table looks like is learnt there. */
-const CLEAR_TABLE = 4;
+export const CLEAR_TABLE = 4;
 
 /** Colours, relative to the paper of the frame, in a coarse 12×12×12 grid. */
 const BINS = 12;
@@ -155,7 +162,8 @@ function bin(r: number, g: number, b: number): number {
 const TABLE_SHARE = 0.004;
 const TABLE_OVER_OBJECT = 3;
 
-interface Prepared { kind: Uint8Array; white: number[] | null }
+/** What lies behind each pixel of a frame on the table plane (ON_… values), and the paper's colour there. */
+export interface Backdrop { kind: Uint8Array; white: number[] | null }
 
 /** The space the object can take: a vertical cylinder standing on the mat, in mat mm. */
 export interface Reach { x: number; y: number; radius: number; height: number }
@@ -171,7 +179,7 @@ function clearOf(reach: Reach, c: number[], tx: number, ty: number): boolean {
   return Math.hypot(ox + s * dx, oy + s * dy) > reach.radius;
 }
 
-function prepare(v: View, map: PaperMap, reach: Reach): Prepared {
+function prepare(v: View, map: PaperMap, reach: Reach): Backdrop {
   const { width: w, height: h, data: px } = v.image;
   const P = projection(v);
   const { R, t } = v.pose;
@@ -190,6 +198,7 @@ function prepare(v: View, map: PaperMap, reach: Reach): Prepared {
       const i = Math.floor(mx * map.perMm), j = Math.floor(my * map.perMm);
       const m = i >= 0 && j >= 0 && i < map.width && j < map.height ? map.data[j * map.width + i] : 0;
       if (m === 1) kind[y * w + x] = ON_PAPER;
+      else if (m === 2) kind[y * w + x] = ON_INK;
       else if (m === 0) {
         const out = outside(map.mat, mx, my);
         if (out > TABLE_NEAR && out < TABLE_FAR) kind[y * w + x] = clearOf(reach, cam, mx, my) ? CLEAR_TABLE : ON_TABLE;
@@ -210,8 +219,9 @@ function prepare(v: View, map: PaperMap, reach: Reach): Prepared {
  * colours are learnt where it stands in front of paper, in every frame together, so the
  * table can be told apart from the object around the mat.
  */
-export function silhouettes(views: View[], map: PaperMap, reach: Reach): Uint8Array[] {
+export function silhouettes(views: View[], map: PaperMap, reach: Reach, backdrops: Backdrop[] = []): Uint8Array[] {
   const prepared = views.map((v) => prepare(v, map, reach));
+  backdrops.push(...prepared);
   const objectHist = new Float64Array(BINS ** 3);
   const masks = views.map((v, n) => {
     const { kind, white } = prepared[n];
@@ -221,8 +231,7 @@ export function silhouettes(views: View[], map: PaperMap, reach: Reach): Uint8Ar
     for (let k = 0; k < w * h; k++) {
       if (kind[k] !== ON_PAPER) continue;
       const r = px[k * 4] / white[0], g = px[k * 4 + 1] / white[1], b = px[k * 4 + 2] / white[2];
-      const hi = Math.max(r, g, b), lo = Math.min(r, g, b);
-      const paper = (r + g + b) / 3 >= MIN_BRIGHTNESS && (hi - lo) / Math.max(hi, 1e-6) <= MAX_TINT;
+      const paper = looksLikePaper(r, g, b);
       mask[k] = paper ? PAPER : OBJECT;
       if (!paper) objectHist[bin(r, g, b)]++;
     }
