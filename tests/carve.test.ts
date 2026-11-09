@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { carve, measure } from '../src/scan3d/carve';
 import { matById, type MatId } from '../src/scan3d/mat';
 import { signedVolume, stl, surface } from '../src/scan3d/mesh';
+import { snap } from '../src/scan3d/stereo';
 import { shootColor, type Solid } from './synthetic3d';
 import type { Vec3 } from '../src/scan3d/pose';
 
@@ -71,5 +72,57 @@ describe('3D model from silhouettes', () => {
     const mat = matById('round');
     const none: Solid = { kind: 'box', x: -500, y: -500, w: 1, d: 1, h: 1, rgb: [0, 0, 0] };
     expect(measure(await carve(mat, circle('round', none)))).toBeNull();
+  });
+});
+
+describe('depth from several views', () => {
+  it('flattens the top of a box with a printed pattern', { timeout: 120000 }, async () => {
+    const mat = matById('round');
+    const box: Solid = { kind: 'box', x: mat.center.x, y: mat.center.y, w: 50, d: 36, h: 30, rgb: [200, 160, 40], pattern: true };
+    const views = circle('round', box);
+    // Silhouettes alone leave a roof several millimetres high on the flat top.
+    const hull = measure(await carve(mat, views, undefined, 2, false))!;
+    expect(hull.height).toBeGreaterThan(34);
+    const m = measure(await carve(mat, views))!;
+    expect(m.height).toBeLessThan(32.5);
+    expect(m.height).toBeGreaterThan(28);
+    expect(m.width).toBeGreaterThan(48);
+    expect(m.volumeMl).toBeGreaterThan((50 * 36 * 30) / 1000);
+  });
+
+  it('moves the surface onto the measured points', { timeout: 120000 }, async () => {
+    const mat = matById('round');
+    const box: Solid = { kind: 'box', x: mat.center.x, y: mat.center.y, w: 50, d: 36, h: 30, rgb: [200, 160, 40], pattern: true };
+    const vol = await carve(mat, circle('round', box));
+    expect(vol.points!.length).toBeGreaterThan(3000);
+    // Distance of the vertices (off the base) from the real box, median.
+    const off = (m: { positions: Float32Array }) => {
+      const p = m.positions, e: number[] = [];
+      for (let i = 0; i < p.length; i += 3) {
+        if (p[i + 2] < 1) continue;
+        const dx = Math.abs(p[i]) - 25, dy = Math.abs(p[i + 1]) - 18, dz = Math.abs(p[i + 2] - 15) - 15;
+        e.push(Math.abs(Math.hypot(Math.max(dx, 0), Math.max(dy, 0), Math.max(dz, 0)) + Math.min(Math.max(dx, dy, dz), 0)));
+      }
+      return e.sort((a, b) => a - b)[e.length >> 1];
+    };
+    const mesh = surface(vol, mat.center);
+    const snapped = snap(mesh, vol.points!, mat.center, vol.voxel);
+    expect(off(snapped)).toBeLessThan(off(mesh) * 0.8);
+    expect(snapped.triangles).toBe(mesh.triangles);
+  });
+});
+
+describe('colour models', () => {
+  it('tells two colour families apart', async () => {
+    const { fit, logLikelihood } = await import('../src/scan3d/colors');
+    const dark: number[] = [], red: number[] = [];
+    for (let i = 0; i < 600; i++) {
+      const n = () => (Math.sin(i * 12.9898) * 43758.5453) % 0.03;
+      dark.push(0.15 + n(), 0.14 - n(), 0.13 + n());
+      red.push(0.8 - n(), 0.2 + n(), 0.2 - n());
+    }
+    const a = fit(Float64Array.from(dark), 3), b = fit(Float64Array.from(red), 3);
+    expect(logLikelihood(a, 0.15, 0.14, 0.13)).toBeGreaterThan(logLikelihood(b, 0.15, 0.14, 0.13) + 10);
+    expect(logLikelihood(b, 0.8, 0.2, 0.2)).toBeGreaterThan(logLikelihood(a, 0.8, 0.2, 0.2) + 10);
   });
 });

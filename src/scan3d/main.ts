@@ -12,6 +12,7 @@ import { uniqueCode, uniqueSlot, type MarkerMode } from '../core/markers';
 import { FAIR_MM, GOOD_MM, SceneView, drawCoverage, quality, type Colors } from './view';
 import { colorCopy, sharpestFrames } from './video';
 import { carve, measure } from './carve';
+import { snap } from './stereo';
 import { simplify, smooth } from './refine';
 import { stl, surface, type Mesh } from './mesh';
 import { MeshView } from './meshview';
@@ -285,7 +286,8 @@ async function buildModel() {
     });
     const size = measure(volume);
     if (size) {
-      const mesh = surface(volume, mat.center);
+      let mesh = surface(volume, mat.center);
+      if (volume.points) mesh = snap(mesh, volume.points, mat.center, volume.voxel);
       model = { raw: mesh, mesh, size };
       refine();
     } else modelEmpty = true;

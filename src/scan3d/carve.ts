@@ -1,5 +1,7 @@
 import type { MatLayout } from './mat';
-import { OBJECT, PAPER, paperMap, projection, silhouettes, type View } from './silhouette';
+import { colorMasks } from './colors';
+import { carveByDepth } from './stereo';
+import { OBJECT, PAPER, paperMap, projection, silhouettes, type Backdrop, type View } from './silhouette';
 
 /**
  * Shape from silhouettes ("voxel carving"): the space above the object area is split
@@ -21,6 +23,8 @@ export interface Volume {
   origin: { x: number; y: number; z: number };
   /** 1 = object. Index i + nx·(j + ny·k). */
   data: Uint8Array;
+  /** Surface points measured from depth (mat mm, x y z triples), when there are any. */
+  points?: Float32Array;
 }
 
 /** Above this many cubes the carving gets slow on phones: the cube grows instead. */
@@ -33,7 +37,7 @@ const PAPER_VOTES = 2;
 /** The lowest millimetres carry printed ink and shadows: they follow the column above. */
 const BASE_MM = 3;
 
-export async function carve(mat: MatLayout, views: View[], onProgress: (done: number) => Promise<void> | void = () => undefined): Promise<Volume> {
+export async function carve(mat: MatLayout, views: View[], onProgress: (done: number) => Promise<void> | void = () => undefined, passes = COLOR_PASSES, depth = true): Promise<Volume> {
   // The object area, and as high as twice its smaller half-width.
   const xs = mat.area.map((p) => p.x), ys = mat.area.map((p) => p.y);
   const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
@@ -41,20 +45,47 @@ export async function carve(mat: MatLayout, views: View[], onProgress: (done: nu
   const voxel = Math.max(0.5, Math.ceil(Math.cbrt(((x1 - x0) * (y1 - y0) * height) / MAX_VOXELS) * 10) / 10);
   const nx = Math.ceil((x1 - x0) / voxel), ny = Math.ceil((y1 - y0) / voxel), nz = Math.ceil(height / voxel);
   const origin = { x: x0 + voxel / 2, y: y0 + voxel / 2, z: -voxel / 2 };
-  const n = nx * ny * nz;
 
   // Only cubes standing on the object area count (a circle on the round mats).
   const inArea = new Uint8Array(nx * ny);
   for (let j = 0; j < ny; j++)
     for (let i = 0; i < nx; i++) inArea[j * nx + i] = insidePolygon(origin.x + i * voxel, origin.y + j * voxel, mat.area) ? 1 : 0;
 
-  const paper = new Uint16Array(n);
-  const object = new Uint16Array(n);
   const radius = Math.max(...mat.area.map((p) => Math.hypot(p.x - mat.center.x, p.y - mat.center.y)));
   const reach = { x: mat.center.x, y: mat.center.y, radius, height };
+  const grid = { nx, ny, nz, voxel, origin, inArea };
   await onProgress(0);
-  const masks = silhouettes(views, paperMap(mat), reach);
-  await onProgress(0.2);
+  const backdrops: Backdrop[] = [];
+  let masks = silhouettes(views, paperMap(mat), reach, backdrops);
+  await onProgress(0.1);
+  let volume = await vote(grid, views, masks, (d) => onProgress(0.1 + 0.3 * d));
+  // Then again, with the colours learnt from the first shape.
+  for (let pass = 0; pass < passes && measure(volume); pass++) {
+    const span = 0.3 / Math.max(1, passes), start = 0.4 + pass * span;
+    masks = colorMasks(views, backdrops, masks, volume);
+    await onProgress(start + span * 0.3);
+    volume = await vote(grid, views, masks, (d) => onProgress(start + span * (0.3 + 0.7 * d)));
+  }
+  // Last, what the frames see through, from the depths they agree on.
+  if (depth && measure(volume)) {
+    volume = await carveByDepth(views, volume, (d) => onProgress(0.7 + 0.3 * d));
+    keepLargest(volume);
+  }
+  await onProgress(1);
+  return volume;
+}
+
+/** How many times the colours are learnt again from the shape so far. */
+const COLOR_PASSES = 2;
+
+interface Grid { nx: number; ny: number; nz: number; voxel: number; origin: Volume['origin']; inArea: Uint8Array }
+
+/** Carves the cubes with the frames' silhouette masks. */
+async function vote(grid: Grid, views: View[], masks: Uint8Array[], onProgress: (done: number) => Promise<void> | void): Promise<Volume> {
+  const { nx, ny, nz, voxel, origin, inArea } = grid;
+  const n = nx * ny * nz;
+  const paper = new Uint16Array(n);
+  const object = new Uint16Array(n);
   for (let vi = 0; vi < views.length; vi++) {
     const v = views[vi];
     const mask = masks[vi];
@@ -80,7 +111,7 @@ export async function carve(mat: MatLayout, views: View[], onProgress: (done: nu
         }
       }
     }
-    await onProgress(0.2 + (0.8 * (vi + 1)) / views.length);
+    await onProgress((vi + 1) / views.length);
   }
 
   const data = new Uint8Array(n);
@@ -97,8 +128,9 @@ export async function carve(mat: MatLayout, views: View[], onProgress: (done: nu
       for (let k = 0; k < base; k++) data[i + nx * (j + ny * k)] = above;
     }
 
-  keepLargest({ nx, ny, nz, voxel, origin, data });
-  return { nx, ny, nz, voxel, origin, data };
+  const volume = { nx, ny, nz, voxel, origin, data };
+  keepLargest(volume);
+  return volume;
 }
 
 function insidePolygon(x: number, y: number, poly: { x: number; y: number }[]): boolean {
