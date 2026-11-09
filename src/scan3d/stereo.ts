@@ -1,4 +1,5 @@
 import type { Volume } from './carve';
+import type { Mesh } from './mesh';
 import { hullMask } from './colors';
 import { projection, type View } from './silhouette';
 
@@ -72,8 +73,110 @@ export async function carveByDepth(views: View[], vol: Volume, onProgress: (done
   }
   const checked = maps.map((m, r) => (m ? consistent(cams, maps, r, near[r], vol.voxel) : null));
   const out = seeThrough(cams, checked, vol);
+  out.points = surfacePoints(cams, checked);
   await onProgress(1);
   return out;
+}
+
+/** The measured surface points, in mat mm (x, y, z triples). */
+function surfacePoints(cams: Cam[], maps: (DepthMap | null)[]): Float32Array {
+  const pts: number[] = [];
+  cams.forEach((c, n) => {
+    const m = maps[n];
+    if (!m) return;
+    const cx = c.w / 2, cy = c.h / 2;
+    for (let y = 0; y < c.h; y++)
+      for (let x = 0; x < c.w; x++) {
+        const d = m.depth[y * c.w + x];
+        if (!(d > 0)) continue;
+        const u = (x + 0.5 - cx) / c.f, v = (y + 0.5 - cy) / c.f;
+        for (let a = 0; a < 3; a++) pts.push(c.C[a] + d * (c.R[a] * u + c.R[3 + a] * v + c.R[6 + a]));
+      }
+  });
+  return Float32Array.from(pts);
+}
+
+/** Points nearer than this (in cubes) pull a vertex of the model, and it moves at most this far. */
+const SNAP_RADIUS = 1.5;
+const SNAP_MAX = 2;
+/** Points needed round a vertex to move it. */
+const SNAP_POINTS = 8;
+
+/**
+ * Moves the model's surface onto the measured points: each vertex goes along its normal
+ * to the mean of the points around it. The cubes leave the surface up to a cube away
+ * from where the frames saw it; this brings back the finer relief where there is detail
+ * to measure. `points` are in mat mm; the mesh in printing mm (see `surface`).
+ */
+export function snap(mesh: Mesh, points: Float32Array, center: { x: number; y: number }, voxel: number): Mesh {
+  const p = mesh.positions, t = mesh.triangles;
+  const nv = p.length / 3;
+  if (!points.length || !nv) return mesh;
+  const r = SNAP_RADIUS * voxel, r2 = r * r;
+  // Points in printing coordinates, hashed into cells of side r.
+  const n = points.length / 3;
+  const q = new Float32Array(points.length);
+  for (let i = 0; i < n; i++) {
+    q[i * 3] = points[i * 3] - center.x;
+    q[i * 3 + 1] = -(points[i * 3 + 1] - center.y);
+    q[i * 3 + 2] = -points[i * 3 + 2];
+  }
+  const key = (x: number, y: number, z: number) => `${Math.floor(x / r)},${Math.floor(y / r)},${Math.floor(z / r)}`;
+  const cells = new Map<string, number[]>();
+  for (let i = 0; i < n; i++) {
+    const k = key(q[i * 3], q[i * 3 + 1], q[i * 3 + 2]);
+    let c = cells.get(k);
+    if (!c) cells.set(k, (c = []));
+    c.push(i);
+  }
+  // Vertex normals, area-weighted.
+  const nor = new Float64Array(p.length);
+  for (let i = 0; i < t.length; i += 3) {
+    const a = t[i] * 3, b = t[i + 1] * 3, c = t[i + 2] * 3;
+    const ux = p[b] - p[a], uy = p[b + 1] - p[a + 1], uz = p[b + 2] - p[a + 2];
+    const vx = p[c] - p[a], vy = p[c + 1] - p[a + 1], vz = p[c + 2] - p[a + 2];
+    const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+    for (const o of [a, b, c]) { nor[o] += nx; nor[o + 1] += ny; nor[o + 2] += nz; }
+  }
+  const out = Float32Array.from(p);
+  for (let v = 0; v < nv; v++) {
+    const x = p[v * 3], y = p[v * 3 + 1], z = p[v * 3 + 2];
+    // The flat base stays on the table.
+    if (z < voxel) continue;
+    let nx = nor[v * 3], ny = nor[v * 3 + 1], nz = nor[v * 3 + 2];
+    const l = Math.hypot(nx, ny, nz);
+    if (!l) continue;
+    nx /= l; ny /= l; nz /= l;
+    // Mean offset along the normal of the points near the vertex's normal line.
+    const near: number[] = [], weight: number[] = [];
+    const cx = Math.floor(x / r), cy = Math.floor(y / r), cz = Math.floor(z / r);
+    for (let dz = -2; dz <= 2; dz++)
+      for (let dy = -2; dy <= 2; dy++)
+        for (let dx = -2; dx <= 2; dx++) {
+          const c = cells.get(`${cx + dx},${cy + dy},${cz + dz}`);
+          if (!c) continue;
+          for (const i of c) {
+            const ex = q[i * 3] - x, ey = q[i * 3 + 1] - y, ez = q[i * 3 + 2] - z;
+            const along = ex * nx + ey * ny + ez * nz;
+            if (Math.abs(along) > SNAP_MAX * voxel) continue;
+            const side2 = ex * ex + ey * ey + ez * ez - along * along;
+            if (side2 > r2) continue;
+            near.push(along);
+            weight.push(1 - side2 / r2);
+          }
+        }
+    if (near.length < SNAP_POINTS) continue;
+    // Weighted median: a few wrong depths don't pull the vertex.
+    const order = near.map((_, i) => i).sort((i, j) => near[i] - near[j]);
+    const half = weight.reduce((a, w) => a + w, 0) / 2;
+    let acc = 0, d = 0;
+    for (const i of order) {
+      acc += weight[i];
+      if (acc >= half) { d = near[i]; break; }
+    }
+    out[v * 3] = x + d * nx; out[v * 3 + 1] = y + d * ny; out[v * 3 + 2] = Math.max(0, z + d * nz);
+  }
+  return { positions: out, triangles: t };
 }
 
 /** For each frame, the frames looking from a bit to the side of it. */

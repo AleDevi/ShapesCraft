@@ -23,6 +23,8 @@ export interface Volume {
   origin: { x: number; y: number; z: number };
   /** 1 = object. Index i + nx·(j + ny·k). */
   data: Uint8Array;
+  /** Surface points measured from depth (mat mm, x y z triples), when there are any. */
+  points?: Float32Array;
 }
 
 /** Above this many cubes the carving gets slow on phones: the cube grows instead. */

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { carve, measure } from '../src/scan3d/carve';
 import { matById, type MatId } from '../src/scan3d/mat';
 import { signedVolume, stl, surface } from '../src/scan3d/mesh';
+import { snap } from '../src/scan3d/stereo';
 import { shootColor, type Solid } from './synthetic3d';
 import type { Vec3 } from '../src/scan3d/pose';
 
@@ -87,6 +88,27 @@ describe('depth from several views', () => {
     expect(m.height).toBeGreaterThan(28);
     expect(m.width).toBeGreaterThan(48);
     expect(m.volumeMl).toBeGreaterThan((50 * 36 * 30) / 1000);
+  });
+
+  it('moves the surface onto the measured points', { timeout: 120000 }, async () => {
+    const mat = matById('round');
+    const box: Solid = { kind: 'box', x: mat.center.x, y: mat.center.y, w: 50, d: 36, h: 30, rgb: [200, 160, 40], pattern: true };
+    const vol = await carve(mat, circle('round', box));
+    expect(vol.points!.length).toBeGreaterThan(3000);
+    // Distance of the vertices (off the base) from the real box, median.
+    const off = (m: { positions: Float32Array }) => {
+      const p = m.positions, e: number[] = [];
+      for (let i = 0; i < p.length; i += 3) {
+        if (p[i + 2] < 1) continue;
+        const dx = Math.abs(p[i]) - 25, dy = Math.abs(p[i + 1]) - 18, dz = Math.abs(p[i + 2] - 15) - 15;
+        e.push(Math.abs(Math.hypot(Math.max(dx, 0), Math.max(dy, 0), Math.max(dz, 0)) + Math.min(Math.max(dx, dy, dz), 0)));
+      }
+      return e.sort((a, b) => a - b)[e.length >> 1];
+    };
+    const mesh = surface(vol, mat.center);
+    const snapped = snap(mesh, vol.points!, mat.center, vol.voxel);
+    expect(off(snapped)).toBeLessThan(off(mesh) * 0.8);
+    expect(snapped.triangles).toBe(mesh.triangles);
   });
 });
 
