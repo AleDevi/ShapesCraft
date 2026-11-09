@@ -1,6 +1,6 @@
 import type { Point } from './homography';
 import { pdfDocument, pdfMmTransform } from './pdf';
-import { exportArea } from './svg';
+import { exportArea, type Layer } from './svg';
 import type { PathShape } from './trace';
 
 /** File formats the traced vector can be saved as. */
@@ -51,12 +51,30 @@ export function flatten(shape: PathShape, tolerance = 0.02): Point[] {
   return out;
 }
 
+/** AutoCAD colour index closest to `color` (#rrggbb), from the colours every CAD program shows the same. */
+export function aciColor(color: string): number {
+  const rgb = [1, 3, 5].map((i) => parseInt(color.slice(i, i + 2), 16));
+  const aci: [number, number[]][] = [
+    [1, [255, 0, 0]], [2, [255, 255, 0]], [3, [0, 255, 0]], [4, [0, 255, 255]], [5, [0, 0, 255]],
+    [6, [255, 0, 255]], [7, [0, 0, 0]], [8, [128, 128, 128]], [9, [192, 192, 192]],
+    [30, [255, 127, 0]], [14, [127, 0, 0]], [94, [0, 127, 0]], [174, [0, 0, 127]], [34, [127, 63, 0]],
+  ];
+  let best = 7, bd = Infinity;
+  for (const [index, c] of aci) {
+    const d = c.reduce((s, v, k) => s + (v - rgb[k]) ** 2, 0);
+    if (d < bd) { bd = d; best = index; }
+  }
+  return best;
+}
+
 /**
  * DXF R12 in millimetres, the version every CAD, CAM and laser program reads.
  * Each shape is one POLYLINE (closed ones flagged closed) on layer 0, with y
  * pointing up as CAD expects, and the drawing's corner at the origin.
+ * With `layers` (colour mode) each colour gets its own layer, COLOR_1, COLOR_2…,
+ * coloured with the nearest CAD colour.
  */
-export function exportDxf(shapes: PathShape[], polygons: Point[][], padding = 2): string {
+export function exportDxf(shapes: PathShape[], polygons: Point[][], padding = 2, layers?: Layer[]): string {
   const { origin, w, h } = exportArea(polygons, padding);
   const out: (string | number)[] = [];
   const add = (...pairs: (string | number)[]) => out.push(...pairs);
@@ -66,14 +84,21 @@ export function exportDxf(shapes: PathShape[], polygons: Point[][], padding = 2)
   add(9, '$INSUNITS', 70, 4, 9, '$MEASUREMENT', 70, 1);
   add(9, '$EXTMIN', 10, 0, 20, 0, 30, 0, 9, '$EXTMAX', 10, num(w), 20, num(h), 30, 0);
   add(0, 'ENDSEC');
-  add(0, 'SECTION', 2, 'ENTITIES');
-  for (const shape of shapes) {
-    const pts = flatten(shape);
-    if (pts.length < 2) continue;
-    add(0, 'POLYLINE', 8, '0', 66, 1, 10, 0, 20, 0, 30, 0, 70, shape.closed ? 1 : 0);
-    for (const p of pts) add(0, 'VERTEX', 8, '0', 10, num(p.x - origin.x), 20, num(h - (p.y - origin.y)), 30, 0);
-    add(0, 'SEQEND', 8, '0');
+  const groups = layers ? layers.map((l, i) => ({ name: `COLOR_${i + 1}`, shapes: l.shapes, aci: aciColor(l.color) })) : [{ name: '0', shapes, aci: 7 }];
+  if (layers) {
+    add(0, 'SECTION', 2, 'TABLES', 0, 'TABLE', 2, 'LAYER', 70, groups.length);
+    for (const g of groups) add(0, 'LAYER', 2, g.name, 70, 0, 62, g.aci, 6, 'CONTINUOUS');
+    add(0, 'ENDTAB', 0, 'ENDSEC');
   }
+  add(0, 'SECTION', 2, 'ENTITIES');
+  for (const g of groups)
+    for (const shape of g.shapes) {
+      const pts = flatten(shape);
+      if (pts.length < 2) continue;
+      add(0, 'POLYLINE', 8, g.name, 66, 1, 10, 0, 20, 0, 30, 0, 70, shape.closed ? 1 : 0);
+      for (const p of pts) add(0, 'VERTEX', 8, g.name, 10, num(p.x - origin.x), 20, num(h - (p.y - origin.y)), 30, 0);
+      add(0, 'SEQEND', 8, g.name);
+    }
   add(0, 'ENDSEC', 0, 'EOF');
   const lines: string[] = [];
   for (let i = 0; i < out.length; i += 2) lines.push(String(out[i]).padStart(3, ' '), String(out[i + 1]));
@@ -91,15 +116,21 @@ function pdfPath(shape: PathShape, origin: Point): string {
 /**
  * A PDF page exactly the size of the drawing, in real millimetres: print it at
  * 100% ("actual size") or import it into cutting and design software.
- * Same look as the SVG: hairline outlines, or solid shapes with `filled`.
+ * Same look as the SVG: hairline outlines, or solid shapes with `filled`;
+ * with `layers` (colour mode) each colour is drawn in its own colour.
  */
-export function exportPdf(shapes: PathShape[], polygons: Point[][], padding = 2, filled = false): Uint8Array {
+export function exportPdf(shapes: PathShape[], polygons: Point[][], padding = 2, filled = false, layers?: Layer[]): Uint8Array {
   const { origin, w, h } = exportArea(polygons, padding);
   const content = [pdfMmTransform(h), '1 J 1 j'];
-  const solid = filled ? shapes.filter((s) => s.closed) : [];
-  const stroked = filled ? shapes.filter((s) => !s.closed) : shapes;
-  if (solid.length) content.push('0 g', ...solid.map((s) => pdfPath(s, origin)), 'f*');
-  if (stroked.length) content.push('0 G 0.1 w', ...stroked.map((s) => `${pdfPath(s, origin)} S`));
+  for (const l of layers ?? [{ color: '#000000', shapes }]) {
+    const rgb = [1, 3, 5].map((i) => num(parseInt(l.color.slice(i, i + 2), 16) / 255)).join(' ');
+    const solid = filled ? l.shapes.filter((s) => s.closed) : [];
+    const stroked = filled ? l.shapes.filter((s) => !s.closed) : l.shapes;
+    // Black and white output stays exactly as it always was.
+    const [fill, stroke] = layers ? [`${rgb} rg`, `${rgb} RG`] : ['0 g', '0 G'];
+    if (solid.length) content.push(fill, ...solid.map((s) => pdfPath(s, origin)), 'f*');
+    if (stroked.length) content.push(`${stroke} 0.1 w`, ...stroked.map((s) => `${pdfPath(s, origin)} S`));
+  }
   return pdfDocument(w, h, content.join('\n'));
 }
 

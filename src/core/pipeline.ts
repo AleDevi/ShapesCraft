@@ -10,7 +10,9 @@ import {
   otsu,
   sampleBilinear,
   type Gray,
+  type Rgba,
 } from './image';
+import { quantize } from './palette';
 import { centerlines, cleanBinary } from './centerline';
 import { isoContours, signedArea, simplifyClosed, simplifyOpen, smoothContour, smoothPath, type PathShape } from './trace';
 
@@ -178,6 +180,44 @@ export function rectify(photo: Gray, frame: FrameLayout, det: Detection, pxPerMm
   return { gray: { width, height, data }, origin: { x: area.x, y: area.y }, pxPerMm };
 }
 
+/**
+ * The same straightened window as `rectify`, in colour, for colour mode.
+ * `photo` is the RGBA photo the grey one was made from.
+ */
+export function rectifyColor(photo: Rgba, frame: FrameLayout, det: Detection, pxPerMm: number): Rgba {
+  const area = workArea(frame);
+  const width = Math.round(area.w * pxPerMm);
+  const height = Math.round(area.h * pxPerMm);
+  const data = new Uint8ClampedArray(width * height * 4);
+  const h = det.sheetToPhoto;
+  const pw = photo.width, ph = photo.height, src = photo.data;
+  for (let y = 0; y < height; y++) {
+    const my = area.y + (y + 0.5) / pxPerMm;
+    for (let x = 0; x < width; x++) {
+      const mx = area.x + (x + 0.5) / pxPerMm;
+      const w = h[6] * mx + h[7] * my + h[8];
+      const px = (h[0] * mx + h[1] * my + h[2]) / w - 0.5;
+      const py = (h[3] * mx + h[4] * my + h[5]) / w - 0.5;
+      const o = (y * width + x) * 4;
+      data[o + 3] = 255;
+      if (!(px >= 0 && py >= 0 && px <= pw - 1 && py <= ph - 1)) {
+        data[o] = data[o + 1] = data[o + 2] = 255;
+        continue;
+      }
+      const x0 = Math.floor(px), y0 = Math.floor(py);
+      const x1 = Math.min(x0 + 1, pw - 1), y1 = Math.min(y0 + 1, ph - 1);
+      const fx = px - x0, fy = py - y0;
+      const a = (y0 * pw + x0) * 4, b = (y0 * pw + x1) * 4, c = (y1 * pw + x0) * 4, d = (y1 * pw + x1) * 4;
+      for (let k = 0; k < 3; k++) {
+        const top = src[a + k] * (1 - fx) + src[b + k] * fx;
+        const bottom = src[c + k] * (1 - fx) + src[d + k] * fx;
+        data[o + k] = top * (1 - fy) + bottom * fy;
+      }
+    }
+  }
+  return { width, height, data };
+}
+
 export interface Prepared {
   /** Illumination-corrected image. */
   field: Gray;
@@ -214,6 +254,11 @@ export interface TraceOptions {
    * (round ends and joins). 0 keeps the thin centre lines.
    */
   lineWidthMm: number;
+  /**
+   * Colour mode: the ink is reduced to at most this many colours and each is
+   * traced on its own layer. 0 = black and white (the default).
+   */
+  colors: number;
 }
 
 export const DEFAULT_TRACE: Omit<TraceOptions, 'threshold'> = {
@@ -225,15 +270,32 @@ export const DEFAULT_TRACE: Omit<TraceOptions, 'threshold'> = {
   smoothMm: 0,
   centerline: false,
   lineWidthMm: 0,
+  colors: 0,
 };
 
-/** Traced outlines in sheet millimetres. */
-export interface Traced {
+/** The shapes of one colour. */
+export interface ColorLayer {
+  /** #rrggbb */
+  color: string;
   shapes: PathShape[];
   polygons: Point[][];
 }
 
-export function trace(p: Prepared, r: Rectified, opts: TraceOptions): Traced {
+/** Traced outlines in sheet millimetres. */
+export interface Traced {
+  /** Every shape; in colour mode all layers together. */
+  shapes: PathShape[];
+  polygons: Point[][];
+  /** Colour mode only: the shapes split by colour, darkest first. */
+  layers?: ColorLayer[];
+}
+
+/**
+ * Traces the shapes. With `opts.colors` and the colour photo, the ink is split
+ * into colours first and every colour is traced on its own (see palette.ts).
+ */
+export function trace(p: Prepared, r: Rectified, opts: TraceOptions, colour?: Rgba): Traced {
+  if (opts.colors > 0 && colour) return traceColors(p, r, opts, colour);
   let field = p.field;
   let level = opts.threshold;
   if (opts.invert) {
@@ -242,6 +304,25 @@ export function trace(p: Prepared, r: Rectified, opts: TraceOptions): Traced {
     field = { ...field, data };
     level = 1 - level;
   }
+  return traceField(field, level, r, opts);
+}
+
+function traceColors(p: Prepared, r: Rectified, opts: TraceOptions, colour: Rgba): Traced {
+  const palette = quantize(colour, p.field, opts.threshold, opts.invert, opts.colors);
+  const layers: ColorLayer[] = [];
+  const n = palette.labels.length;
+  palette.colors.forEach((color, c) => {
+    // Dark where this colour is, as the grey image is dark where the ink is.
+    const data = new Float32Array(n);
+    for (let i = 0; i < n; i++) data[i] = palette.labels[i] === c ? 0 : 1;
+    const out = traceField({ width: palette.width, height: palette.height, data }, 0.5, r, opts);
+    if (out.shapes.length) layers.push({ color, ...out });
+  });
+  return { shapes: layers.flatMap((l) => l.shapes), polygons: layers.flatMap((l) => l.polygons), layers };
+}
+
+/** Traces where `field` is darker than `level`. */
+function traceField(field: Gray, level: number, r: Rectified, opts: TraceOptions): Traced {
   field = boxBlur(field, Math.round(opts.blurMm * r.pxPerMm), 2);
 
   const toMm = (q: Point): Point => ({ x: r.origin.x + q.x / r.pxPerMm, y: r.origin.y + q.y / r.pxPerMm });

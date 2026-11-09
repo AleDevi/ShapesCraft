@@ -5,13 +5,14 @@ import { framePdf, framePdfName } from './core/pdf';
 import { MarkerChoice } from './core/markerChoice';
 import type { MarkerMode } from './core/markers';
 import { defaultLang, translator, type Lang, type Translate } from './i18n';
-import { grayToRgba, toGray } from './core/image';
+import { grayToRgba, toGray, type Rgba } from './core/image';
 import {
   DEFAULT_TRACE,
   FrameNotFoundError,
   detectFrame,
   prepare,
   rectify,
+  rectifyColor,
   trace,
   type Detection,
   type Prepared,
@@ -48,6 +49,8 @@ const controls = {
   invert: $<HTMLInputElement>('invert'),
   centerline: $<HTMLInputElement>('centerline'),
   lineWidth: $<HTMLInputElement>('linewidth'),
+  colors: $<HTMLInputElement>('colors'),
+  colorCount: $<HTMLInputElement>('colorcount'),
   showPhoto: $<HTMLInputElement>('show-photo'),
   fill: [...document.querySelectorAll<HTMLInputElement>('input[name="fill"]')],
   format: [...document.querySelectorAll<HTMLInputElement>('input[name="format"]')],
@@ -59,7 +62,10 @@ interface Session {
   rectified: Rectified;
   prepared: Prepared;
   detection: Detection;
+  /** The straightened photo in colour, for colour mode. */
+  colour: Rgba;
   photoUrl: string;
+  colourUrl: string;
   traced?: Traced;
 }
 let session: Session | null = null;
@@ -95,6 +101,11 @@ controls.smooth.value = String(DEFAULT_TRACE.smoothMm);
 controls.invert.checked = DEFAULT_TRACE.invert;
 controls.centerline.checked = DEFAULT_TRACE.centerline;
 controls.lineWidth.value = String(DEFAULT_TRACE.lineWidthMm);
+// Colour mode always starts off: black and white is the base. The number of colours is remembered.
+controls.colors.checked = false;
+const savedCount = Number(localStorageGet('colorCount'));
+controls.colorCount.value = String(savedCount >= 2 && savedCount <= 6 ? savedCount : 3);
+controls.colorCount.addEventListener('change', () => localStorageSet('colorCount', controls.colorCount.value));
 const savedFill = localStorageGet('fill');
 for (const radio of controls.fill) {
   radio.checked = radio.value === (savedFill === 'filled' ? 'filled' : 'outline');
@@ -106,6 +117,10 @@ for (const radio of controls.fill) {
 /** Thin single lines are open paths with no inside; widened ones are closed outlines. */
 function openLines() {
   return controls.centerline.checked && !(Number(controls.lineWidth.value) > 0);
+}
+/** Colour mode is on and applies to the chosen format (STL is a single solid). */
+function colorMode() {
+  return controls.colors.checked && format() !== 'stl';
 }
 /** Filled output applies to closed shapes only, so thin single lines turn it off. */
 function isFilled() {
@@ -211,7 +226,7 @@ for (const id of ['camera', 'upload']) {
 }
 
 let pending = 0;
-for (const el of [controls.threshold, controls.tolerance, controls.minarea, controls.smooth, controls.lineWidth, controls.invert, controls.centerline]) {
+for (const el of [controls.threshold, controls.tolerance, controls.minarea, controls.smooth, controls.lineWidth, controls.invert, controls.centerline, controls.colors, controls.colorCount]) {
   el.addEventListener('input', () => {
     updateOutputs();
     // Coalesce slider drags into one re-trace per frame.
@@ -233,8 +248,12 @@ for (const radio of controls.format) {
   radio.addEventListener('change', () => {
     localStorageSet('format', radio.value);
     updateOutputs();
-    render();
-    scheduleSolid();
+    // STL ignores colours, so switching to or from it changes what is traced.
+    if (controls.colors.checked) retrace();
+    else {
+      render();
+      scheduleSolid();
+    }
   });
 }
 
@@ -326,23 +345,23 @@ function format(): Format {
 /** The traced vector in the chosen format. */
 async function exportFile(): Promise<File | null> {
   if (!session?.traced) return null;
-  const { shapes, polygons } = session.traced;
+  const { shapes, polygons, layers } = session.traced;
   const f = format();
   let data: BlobPart;
-  if (f === 'svg') data = exportSvg(shapes, polygons, PADDING_MM, isFilled());
-  else if (f === 'dxf') data = exportDxf(shapes, polygons, PADDING_MM);
-  else if (f === 'pdf') data = exportPdf(shapes, polygons, PADDING_MM, isFilled()) as BlobPart;
+  if (f === 'svg') data = exportSvg(shapes, polygons, PADDING_MM, isFilled(), layers);
+  else if (f === 'dxf') data = exportDxf(shapes, polygons, PADDING_MM, layers);
+  else if (f === 'pdf') data = exportPdf(shapes, polygons, PADDING_MM, isFilled(), layers) as BlobPart;
   else if (f === 'stl') {
     const mesh = buildSolid();
     if (!mesh) return null;
     data = stl(mesh, 'ShapesCraft');
   }
-  else data = (await renderPng(shapes, polygons)) as BlobPart;
+  else data = (await renderPng(session.traced)) as BlobPart;
   return new File([data], exportName(f, new Date(), session.detection.code), { type: MIME[f] });
 }
 
 /** Draws the shapes on a white canvas at real size and records the dpi in the PNG. */
-async function renderPng(shapes: Traced['shapes'], polygons: Traced['polygons']): Promise<Uint8Array> {
+async function renderPng({ shapes, polygons, layers }: Traced): Promise<Uint8Array> {
   const { origin, w, h } = exportArea(polygons, PADDING_MM);
   const dpi = pngDpi(w, h);
   const scale = dpi / 25.4;
@@ -353,13 +372,15 @@ async function renderPng(shapes: Traced['shapes'], polygons: Traced['polygons'])
   ctx.fillStyle = '#fff';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.scale(scale, scale);
-  ctx.fillStyle = ctx.strokeStyle = '#000';
   ctx.lineWidth = 0.2;
   ctx.lineJoin = ctx.lineCap = 'round';
   const filled = isFilled();
-  const solid = new Path2D(shapes.filter((s) => filled && s.closed).map((s) => pathData(s, origin)).join(' '));
-  ctx.fill(solid, 'evenodd');
-  for (const s of shapes) if (!(filled && s.closed)) ctx.stroke(new Path2D(pathData(s, origin)));
+  for (const layer of layers ?? [{ color: '#000', shapes }]) {
+    ctx.fillStyle = ctx.strokeStyle = layer.color;
+    const solid = new Path2D(layer.shapes.filter((s) => filled && s.closed).map((s) => pathData(s, origin)).join(' '));
+    ctx.fill(solid, 'evenodd');
+    for (const s of layer.shapes) if (!(filled && s.closed)) ctx.stroke(new Path2D(pathData(s, origin)));
+  }
   const blob = await new Promise<Blob>((res, rej) => canvas.toBlob((b) => (b ? res(b) : rej(new Error('PNG'))), 'image/png'));
   return pngWithDpi(new Uint8Array(await blob.arrayBuffer()), dpi);
 }
@@ -397,7 +418,8 @@ async function processPhoto(file: File) {
     const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
     ctx.drawImage(bitmap, 0, 0, w, h);
     bitmap.close();
-    const photo = toGray(ctx.getImageData(0, 0, w, h));
+    const pixels = ctx.getImageData(0, 0, w, h);
+    const photo = toGray(pixels);
 
     setStatus(() => t('status.detecting'));
     await nextFrame();
@@ -407,9 +429,13 @@ async function processPhoto(file: File) {
     await nextFrame();
     const rectified = rectify(photo, frame, detection, PX_PER_MM);
     const prepared = prepare(rectified);
+    const colour = rectifyColor(pixels, frame, detection, PX_PER_MM);
 
-    if (session) URL.revokeObjectURL(session.photoUrl);
-    session = { rectified, prepared, detection, photoUrl: await grayUrl(rectified) };
+    if (session) {
+      URL.revokeObjectURL(session.photoUrl);
+      URL.revokeObjectURL(session.colourUrl);
+    }
+    session = { rectified, prepared, detection, colour, photoUrl: await grayUrl(rectified), colourUrl: await imageUrl(colour) };
     controls.threshold.value = prepared.autoThreshold.toFixed(2);
     updateOutputs();
     result.hidden = false;
@@ -435,12 +461,13 @@ function options(): TraceOptions {
     invert: controls.invert.checked,
     centerline: controls.centerline.checked,
     lineWidthMm: Number(controls.lineWidth.value),
+    colors: colorMode() ? Number(controls.colorCount.value) : 0,
   };
 }
 
 function retrace() {
   if (!session) return;
-  session.traced = trace(session.prepared, session.rectified, options());
+  session.traced = trace(session.prepared, session.rectified, options(), session.colour);
   solid = null;
   render();
   scheduleSolid();
@@ -450,17 +477,23 @@ function render() {
   if (!session?.traced) return;
   const r = session.rectified;
   const area = { x: r.origin.x, y: r.origin.y, w: r.gray.width / r.pxPerMm, h: r.gray.height / r.pxPerMm };
-  const { shapes, polygons } = session.traced;
-  const paths = shapes.map((s) => `<path d="${pathData(s)}" fill="none"/>`).join('');
+  const { shapes, polygons, layers } = session.traced;
   const image = controls.showPhoto.checked
-    ? `<image href="${session.photoUrl}" x="${area.x}" y="${area.y}" width="${area.w}" height="${area.h}" opacity="0.55"/>`
+    ? `<image href="${layers ? session.colourUrl : session.photoUrl}" x="${area.x}" y="${area.y}" width="${area.w}" height="${area.h}" opacity="0.55"/>`
     : '';
+  const solidLook = isFilled() || (format() === 'stl' && !openLines());
+  const group = (list: typeof shapes, fill: string, stroke: string) =>
+    `<g fill="${fill}" fill-rule="evenodd" stroke="${stroke}" stroke-width="0.6" vector-effect="non-scaling-stroke">` +
+    // Tint the inside of closed outlines; single lines have no inside.
+    `<path d="${list.filter((s) => s.closed).map((s) => pathData(s)).join(' ')}" stroke="none"/>` +
+    list.map((s) => `<path d="${pathData(s)}" fill="none"/>`).join('') +
+    '</g>';
+  const drawn = layers
+    ? layers.map((l) => group(l.shapes, solidLook ? l.color : `${l.color}33`, solidLook ? '#1f6feb' : l.color)).join('')
+    : group(shapes, solidLook ? 'rgba(28,33,40,0.85)' : 'rgba(31,111,235,0.12)', '#1f6feb');
   preview.innerHTML =
     `<svg viewBox="${area.x} ${area.y} ${area.w} ${area.h}" xmlns="http://www.w3.org/2000/svg">` +
-    `<rect x="${area.x}" y="${area.y}" width="${area.w}" height="${area.h}" fill="#fff"/>${image}` +
-    `<g fill="${isFilled() || (format() === 'stl' && !openLines()) ? 'rgba(28,33,40,0.85)' : 'rgba(31,111,235,0.12)'}" fill-rule="evenodd" stroke="#1f6feb" stroke-width="0.6" vector-effect="non-scaling-stroke">` +
-    // Tint the inside of closed outlines; single lines have no inside.
-    `<path d="${shapes.filter((s) => s.closed).map((s) => pathData(s)).join(' ')}" stroke="none"/>${paths}</g></svg>`;
+    `<rect x="${area.x}" y="${area.y}" width="${area.w}" height="${area.h}" fill="#fff"/>${image}${drawn}</svg>`;
 
   if (!polygons.length) {
     summary.textContent = t('summary.none');
@@ -470,11 +503,24 @@ function render() {
   summary.textContent =
     `${polygons.length} ${t(openLines() ? (polygons.length === 1 ? 'summary.line' : 'summary.lines') : polygons.length === 1 ? 'summary.shape' : 'summary.shapes')} · ` +
     `${(box.maxX - box.minX).toFixed(1)} × ${(box.maxY - box.minY).toFixed(1)} mm`;
+  if (layers) {
+    summary.append(` · ${layers.length === 1 ? t('summary.color') : t('summary.colors', { n: layers.length })} `);
+    for (const l of layers) {
+      const swatch = document.createElement('span');
+      swatch.className = 'swatch';
+      swatch.style.background = l.color;
+      swatch.title = l.color;
+      summary.append(swatch);
+    }
+  }
 }
 
 function updateOutputs() {
   $('fill-hint').textContent = t(openLines() ? 'fill.lines' : 'fill.hint');
   $('linewidth-row').hidden = !controls.centerline.checked;
+  $('colorcount-row').hidden = !controls.colors.checked;
+  $<HTMLOutputElement>('colorcount-out').value = controls.colorCount.value;
+  $('colors-hint').textContent = t(controls.colors.checked && format() === 'stl' ? 'colors.stl' : 'colors.hint');
   const width = Number(controls.lineWidth.value);
   $<HTMLOutputElement>('linewidth-out').value = width ? `${width.toFixed(1)} mm` : t('linewidth.thin');
   $<HTMLOutputElement>('threshold-out').value = Number(controls.threshold.value || 0).toFixed(2);
@@ -503,14 +549,18 @@ function updateOutputs() {
   $<HTMLOutputElement>('smooth-out').value = Number(controls.smooth.value) ? `${controls.smooth.value} mm` : t('smooth.off');
 }
 
-async function grayUrl(r: Rectified): Promise<string> {
-  const { width, height } = r.gray;
+function grayUrl(r: Rectified): Promise<string> {
+  return imageUrl(grayToRgba(r.gray));
+}
+
+async function imageUrl(rgba: Rgba): Promise<string> {
+  const { width, height } = rgba;
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
   const ctx = canvas.getContext('2d')!;
   const img = ctx.createImageData(width, height);
-  img.data.set(grayToRgba(r.gray).data);
+  img.data.set(rgba.data);
   ctx.putImageData(img, 0, 0);
   const blob = await new Promise<Blob>((res) => canvas.toBlob((b) => res(b!), 'image/jpeg', 0.85));
   return URL.createObjectURL(blob);

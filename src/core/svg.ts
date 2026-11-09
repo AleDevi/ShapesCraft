@@ -1,6 +1,9 @@
 import type { Point } from './homography';
 import type { PathShape } from './trace';
 
+/** The shapes of one colour (colour mode). */
+export interface Layer { color: string; shapes: PathShape[] }
+
 const fmt = (n: number) => (Math.round(n * 1000) / 1000).toString();
 const pt = (p: Point) => `${fmt(p.x)} ${fmt(p.y)}`;
 
@@ -40,19 +43,37 @@ export function exportArea(polygons: Point[][], padding: number) {
  * Outlines are hairline strokes with no fill, the form laser and CNC software expects.
  * With `filled`, closed shapes become one solid black path whose even-odd rule
  * keeps holes open; open lines stay strokes, since they have no inside.
+ * With `layers` (colour mode) each colour is its own group, drawn in its colour
+ * and marked as a layer for Inkscape; Illustrator and laser software read the
+ * groups (or the colours) as layers too.
  */
-export function exportSvg(shapes: PathShape[], polygons: Point[][], padding = 2, filled = false): string {
+export function exportSvg(shapes: PathShape[], polygons: Point[][], padding = 2, filled = false, layers?: Layer[]): string {
   if (!polygons.length) return '<svg xmlns="http://www.w3.org/2000/svg" width="10mm" height="10mm" viewBox="0 0 10 10"/>';
   const { origin, w, h } = exportArea(polygons, padding);
-  const stroked = filled ? shapes.filter((s) => !s.closed) : shapes;
-  const solid = filled ? shapes.filter((s) => s.closed) : [];
+  const draw = (list: PathShape[], color: string, indent: string) => {
+    const stroked = filled ? list.filter((s) => !s.closed) : list;
+    const solid = filled ? list.filter((s) => s.closed) : [];
+    const out: string[] = [];
+    if (solid.length) out.push(`${indent}<path d="${solid.map((s) => pathData(s, origin)).join(' ')}" fill="${color}" fill-rule="evenodd"/>`);
+    if (stroked.length) {
+      out.push(
+        `${indent}<g fill="none" stroke="${color}" stroke-width="0.1">`,
+        ...stroked.map((s) => `${indent}  <path d="${pathData(s, origin)}"/>`),
+        `${indent}</g>`,
+      );
+    }
+    return out;
+  };
   const body: string[] = [];
-  if (solid.length) body.push(`<path d="${solid.map((s) => pathData(s, origin)).join(' ')}" fill="#000" fill-rule="evenodd"/>`);
-  if (stroked.length) {
-    body.push(`<g fill="none" stroke="#000" stroke-width="0.1">`, ...stroked.map((s) => `  <path d="${pathData(s, origin)}"/>`), '</g>');
-  }
+  if (layers) {
+    layers.forEach((l, i) => {
+      const name = `${i + 1} ${l.color}`;
+      body.push(`<g id="color-${i + 1}" inkscape:groupmode="layer" inkscape:label="${name}">`, ...draw(l.shapes, l.color, '  '), '</g>');
+    });
+  } else body.push(...draw(shapes, '#000', ''));
+  const ns = layers ? ' xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"' : '';
   return [
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${fmt(w)}mm" height="${fmt(h)}mm" viewBox="0 0 ${fmt(w)} ${fmt(h)}">`,
+    `<svg xmlns="http://www.w3.org/2000/svg"${ns} width="${fmt(w)}mm" height="${fmt(h)}mm" viewBox="0 0 ${fmt(w)} ${fmt(h)}">`,
     ...body,
     '</svg>',
   ].join('\n');
