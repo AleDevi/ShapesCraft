@@ -113,7 +113,7 @@ export function colorMasks(views: View[], backdrops: Backdrop[], first: Uint8Arr
 }
 
 /** Where the carved shape falls in the frame. */
-function hullMask(v: View, vol: Volume): Uint8Array {
+export function hullMask(v: View, vol: Volume): Uint8Array {
   const { width: w, height: h } = v.image;
   const mask = new Uint8Array(w * h);
   const P = projection(v);

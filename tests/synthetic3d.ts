@@ -62,8 +62,8 @@ export function shoot(c: Vec3, f: number, width: number, height: number, matId: 
 
 /** An object standing on the mat: an upright box or cylinder, in mat mm (height up from the table). */
 export type Solid =
-  | { kind: 'box'; x: number; y: number; w: number; d: number; h: number; rgb: [number, number, number] }
-  | { kind: 'cylinder'; x: number; y: number; r: number; h: number; rgb: [number, number, number] };
+  | { kind: 'box'; x: number; y: number; w: number; d: number; h: number; rgb: [number, number, number]; pattern?: boolean }
+  | { kind: 'cylinder'; x: number; y: number; r: number; h: number; rgb: [number, number, number]; pattern?: boolean };
 
 /** Distance along the ray o + s·d to the solid, or Infinity. Mat coordinates: z into the table. */
 function hit(o: Vec3, d: Vec3, s: Solid): number {
@@ -111,7 +111,13 @@ export function shootColor(c: Vec3, f: number, width: number, height: number, ma
       let rgb: number[];
       if (s < Infinity) {
         // A little shading so the faces differ.
-        const shade = 0.75 + 0.25 * Math.abs(d[0]);
+        let shade = 0.75 + 0.25 * Math.abs(d[0]);
+        // A random print of 3 mm cells, for depth from several views.
+        if (solid.pattern) {
+          const p = [c[0] + s * d[0], c[1] + s * d[1], c[2] + s * d[2]].map((v) => Math.floor(v / 3 + 1e-3));
+          const r = Math.abs(Math.sin(p[0] * 12.9898 + p[1] * 78.233 + p[2] * 37.719) * 43758.5453) % 1;
+          shade *= 0.45 + 0.55 * r;
+        }
         rgb = solid.rgb.map((k) => k * shade);
       } else {
         const k = -c[2] / d[2];

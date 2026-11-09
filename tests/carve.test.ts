@@ -74,6 +74,22 @@ describe('3D model from silhouettes', () => {
   });
 });
 
+describe('depth from several views', () => {
+  it('flattens the top of a box with a printed pattern', { timeout: 120000 }, async () => {
+    const mat = matById('round');
+    const box: Solid = { kind: 'box', x: mat.center.x, y: mat.center.y, w: 50, d: 36, h: 30, rgb: [200, 160, 40], pattern: true };
+    const views = circle('round', box);
+    // Silhouettes alone leave a roof several millimetres high on the flat top.
+    const hull = measure(await carve(mat, views, undefined, 2, false))!;
+    expect(hull.height).toBeGreaterThan(34);
+    const m = measure(await carve(mat, views))!;
+    expect(m.height).toBeLessThan(32.5);
+    expect(m.height).toBeGreaterThan(28);
+    expect(m.width).toBeGreaterThan(48);
+    expect(m.volumeMl).toBeGreaterThan((50 * 36 * 30) / 1000);
+  });
+});
+
 describe('colour models', () => {
   it('tells two colour families apart', async () => {
     const { fit, logLikelihood } = await import('../src/scan3d/colors');

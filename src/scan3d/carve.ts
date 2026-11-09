@@ -1,5 +1,6 @@
 import type { MatLayout } from './mat';
 import { colorMasks } from './colors';
+import { carveByDepth } from './stereo';
 import { OBJECT, PAPER, paperMap, projection, silhouettes, type Backdrop, type View } from './silhouette';
 
 /**
@@ -34,7 +35,7 @@ const PAPER_VOTES = 2;
 /** The lowest millimetres carry printed ink and shadows: they follow the column above. */
 const BASE_MM = 3;
 
-export async function carve(mat: MatLayout, views: View[], onProgress: (done: number) => Promise<void> | void = () => undefined, passes = COLOR_PASSES): Promise<Volume> {
+export async function carve(mat: MatLayout, views: View[], onProgress: (done: number) => Promise<void> | void = () => undefined, passes = COLOR_PASSES, depth = true): Promise<Volume> {
   // The object area, and as high as twice its smaller half-width.
   const xs = mat.area.map((p) => p.x), ys = mat.area.map((p) => p.y);
   const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
@@ -58,10 +59,15 @@ export async function carve(mat: MatLayout, views: View[], onProgress: (done: nu
   let volume = await vote(grid, views, masks, (d) => onProgress(0.1 + 0.3 * d));
   // Then again, with the colours learnt from the first shape.
   for (let pass = 0; pass < passes && measure(volume); pass++) {
-    const span = 0.6 / Math.max(1, passes), start = 0.4 + pass * span;
+    const span = 0.3 / Math.max(1, passes), start = 0.4 + pass * span;
     masks = colorMasks(views, backdrops, masks, volume);
     await onProgress(start + span * 0.3);
     volume = await vote(grid, views, masks, (d) => onProgress(start + span * (0.3 + 0.7 * d)));
+  }
+  // Last, what the frames see through, from the depths they agree on.
+  if (depth && measure(volume)) {
+    volume = await carveByDepth(views, volume, (d) => onProgress(0.7 + 0.3 * d));
+    keepLargest(volume);
   }
   await onProgress(1);
   return volume;
